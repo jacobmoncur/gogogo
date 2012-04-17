@@ -2,7 +2,7 @@
   "name": "gogogo",
   "description":"CLI to automate deploys based on package.json",
   "author": "Sean Hess",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "repository": { "url": "git@github.com:idottv/gogogo.git" },
   "bin": { "gogogo" : "run.js" },
   "scripts": { "install" : "bash install.sh" },
