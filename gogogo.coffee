@@ -59,8 +59,8 @@ run = (args, cb) ->
 # does not use a git remote, because we can git push to the url
 create = (name, server, cb) ->
   console.log "GOGOGO CREATING!"
-  console.log " name: #{name}"
-  console.log " server: #{server}"
+  console.log " - name: #{name}"
+  console.log " - server: #{server}"
 
   reponame process.cwd(), (err, rn) ->
     if err? then return cb err
@@ -74,9 +74,9 @@ create = (name, server, cb) ->
     hookfile = "#{repo}/.git/hooks/post-receive"
     deployurl = "ssh://#{server}/~/#{PREFIX}/#{id}"
 
-    console.log " id: #{id}"
-    console.log " repo: #{repo}"
-    console.log " remote: #{deployurl}"
+    console.log " - id: #{id}"
+    console.log " - repo: #{repo}"
+    console.log " - remote: #{deployurl}"
 
     # upstart service
     service = """
@@ -104,6 +104,12 @@ create = (name, server, cb) ->
     remote = """
       mkdir -p #{repo}
       cd #{repo}
+      echo "Locating git"
+      which git 
+      if (( $? )); then
+          echo "Could not locate git"
+          exit 1
+      fi
       git init
       git config receive.denyCurrentBranch ignore
 
@@ -173,7 +179,7 @@ start = (config, cb) ->
   ssh config.server, "start #{config.id};", cb
 
 version = (cb) ->
-  package (err, info) ->
+  pckg (err, info) ->
     console.log "GOGOGO v#{info.version}"
 
 help = (cb) ->
@@ -224,7 +230,7 @@ usage = -> console.log "Usage: gogogo create NAME USER@SERVER"
 
 ## HELPERS #################################################
 
-package = (cb) -> 
+pckg = (cb) ->
   fs.readFile path.join(__dirname, "package.json"), (err, data) ->
     if err? then return cb err
     cb null, JSON.parse data
@@ -242,7 +248,7 @@ reponame = (dir, cb) ->
 # write a config file
 writeConfig = (f, obj, cb) ->
   fs.mkdir path.dirname(f), (err) ->
-    fs.writeFile f, "module.exports = " + JSON.stringify(obj), 0775, cb
+    fs.writeFile f, "module.exports = " + JSON.stringify(obj), 0o0775, cb
 
 # read a config file
 readConfig = (f, cb) ->
