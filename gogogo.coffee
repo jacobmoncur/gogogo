@@ -79,13 +79,16 @@ create = (name, server, cb) ->
     console.log " - remote: #{deployurl}"
 
     # upstart service
+    # we use 'su root -c' because we need to keep our environment variables
+    # http://serverfault.com/questions/128605/have-upstart-read-environment-from-etc-environment-for-a-service
+    # TODO add deploy user
     service = """
       description '#{id}'
       start on startup
       chdir #{repo}
       respawn
       respawn limit 5 5 
-      exec npm start >> #{log} 2>&1
+      exec su root -c 'npm start' >> #{log} 2>&1
     """
 
     # http://toroid.org/ams/git-website-howto
