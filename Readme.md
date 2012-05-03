@@ -22,6 +22,7 @@ Server Requirements
 
 1. Upstart (included with ubuntu)
 2. SSH Access
+3. Git installed on both local computer and server
 
 Usage
 -----
@@ -79,7 +80,7 @@ Limitations
 
 1. Only works on ubuntu (requires upstart to be installed)
 2. Can't handle scheduled tasks yet (cron)
-3. Can't handle server-level environment variables yet
+3. You must change the port in either the code or an environment variable to run the same app twice on the same server
 
 Roadmap
 -------
@@ -113,7 +114,10 @@ If they are the same no matter which server is deployed, put them in your start 
 
     "start":"DB_HOST=localhost node app.js"
 
-If they refer to something about the server you are on, I'd like to figure out a way to set them on the server itself, so that any app on that server has the variables. I don't know how to do this yet.  
+If they refer to something about the server you are on, put them in /etc/environment.
+
+    # /etc/environment
+    NODE_ENV="production"
 
 ### Multiple servers
 
@@ -144,5 +148,14 @@ You can leave the name and branch off any command and it will use the last name 
     gogogo deploy
     gogogo restart
     gogogo logs
+
+### Reinstall / Upgrade
+
+To reinstall, run `npm install -g gogogo` again, then redo the create step in your repository. 
+
+### Gitignore
+
+I recommend you ignore .ggg/_main.js but that you check the other config files in, so anyone using the repository can deploy as long as they have ssh access to the server
+
 
 
