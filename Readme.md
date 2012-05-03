@@ -17,6 +17,12 @@ Installation
 
     npm -g install gogogo
 
+Change Log
+----------
+
+* 0.2.5 - Server Environment variables are preserved! Deploy monitors the log for a couple seconds. 
+* 0.2.0 - gogogo list, logs, start, stop, restart, deploy
+
 Server Requirements
 -------------------
 
