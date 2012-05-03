@@ -15,6 +15,8 @@ APP = "gogogo"
 PREFIX = "ggg"
 CONFIG = ".ggg"
 
+LOGS_LINES = 40
+
 {spawn, exec} = require 'child_process'
 fs = require 'fs'
 path = require 'path'
@@ -46,7 +48,7 @@ run = (args, cb) ->
             when "restart" then restart config, cb
             when "start" then start config, cb
             when "stop" then stop config, cb
-            when "logs" then logs config, cb
+            when "logs" then logs config, LOGS_LINES, cb
             when "deploy"
               branch = args[2] || lastBranch
               deploy config, branch, cb
@@ -150,7 +152,14 @@ deploy = (config, branch, cb) ->
     command = installCommand(config) + restartCommand(config)
     ssh config.server, command, (err) ->
       if err? then return cb err
-      writeMainConfig config.name, branch, cb
+      writeMainConfig config.name, branch, (err) ->
+        if err? then return cb err
+        console.log ""
+        command = logs config, 0
+
+        # for some reason it takes a while to actually kill it, like 10s
+        kill = -> command.kill()
+        setTimeout kill, 2000
 
 ## SIMPLE CONTROL ########################################################
 
@@ -197,12 +206,12 @@ help = (cb) ->
   console.log "gogogo create <name> <server> - creates a new named server"
   cb()
 
-# this should never exit. You have to Command-C it
-logs = (config, cb) ->
+# this will never exit. You have to Command-C it, or stop the spawned process
+logs = (config, lines) ->
   log = config.repo + "/log.txt"
   console.log "Tailing #{log}... Control-C to exit"
   console.log "-------------------------------------------------------------"
-  ssh config.server, "tail -n 40 -f #{log}", cb
+  ssh config.server, "tail -n #{lines} -f #{log}", ->
 
 list = (cb) ->
   local "ls", [".ggg"], cb
@@ -243,7 +252,7 @@ pckg = (cb) ->
 reponame = (dir, cb) ->
   exec "git config --get remote.origin.url", {cwd:dir}, (err, stdout, stderr) ->
     if err?
-      cb null, path.basename(path.dirname(dir))
+      cb null, path.basename(dir)
     else
       url = stdout.replace("\n","")
       cb null, path.basename(url).replace(".git","")
@@ -303,6 +312,7 @@ local = (command, args, cb) ->
     if code then return cb(new Error("Command Failed"))
     cb()
 
+  return process
 
 
 
