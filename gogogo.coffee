@@ -145,7 +145,7 @@ create = (name, server, cb) ->
 deploy = (config, branch, cb) ->
   console.log "  branch: #{branch}"
   console.log "PUSHING"
-  local "git", ["push", config.repoUrl, branch], (err) ->
+  local "git", ["push", config.repoUrl, branch, "-f"], (err) ->
     if err? then return cb err
 
     # now install and run
