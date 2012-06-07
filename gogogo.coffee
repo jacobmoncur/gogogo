@@ -72,7 +72,7 @@ create = (name, server, cb) ->
     parent = "$HOME/" + PREFIX
     repo = wd = "#{parent}/#{id}"
     upstart = "/etc/init/#{id}.conf"
-    log = "log.txt"
+    log = path.join(repo, "log.txt")
     hookfile = "#{repo}/.git/hooks/post-receive"
     deployurl = "ssh://#{server}/~/#{PREFIX}/#{id}"
 
