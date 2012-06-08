@@ -56,15 +56,16 @@ path = require 'path'
 run = (args, cb) ->
   action = args[0]
   name = args[1]
-  reponame process.cwd(), (err, repoName) ->
-    if err? then return cb err
-    switch action
-      when "init" then init cb
-      when "--version" then version cb
-      # when "help" then help cb
-      # when "--help" then help cb
-      # when "-h" then help cb
-      else
+  switch action
+    when undefined then help cb
+    when "init" then init cb
+    when "--version" then version cb
+    when "help" then help cb
+    when "--help" then help cb
+    when "-h" then help cb
+    else
+      reponame process.cwd(), (err, repoName) ->
+        if err? then return cb err
         readMainConfig (err, mainConfig) ->
           if err then return cb new Error "Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=#{err.message}"
           switch action
