@@ -9,11 +9,31 @@ gogogo
  - deploy sets .ggg/_.js -> branch=master, 
  - runs last "gogogo" command, whatever that was
  - stores to .ggg/_.js
+
+
+REQUIREMENTS
+ - don't require node on the server?
+ + write a bash script on deploy! (YES)
+ - we know the user has node/npm on their LOCAL
+
+CONFIG FILE FORMAT: (json?)
+  ggg.js (or .coffee!)
+
+  module.exports = { 
+    services: {
+      blah: ""
+      something: ""
+    }
+  , cron: ""
+  , dev: "root@dev.i.tv"
+  , telus: "root@telus"
+  }
+
 ###
 
 APP = "gogogo"
 PREFIX = "ggg"
-CONFIG = ".ggg"
+CONFIG = "ggg"
 
 LOGS_LINES = 40
 
@@ -28,57 +48,86 @@ path = require 'path'
 # figure out what to call, and with which arguments
 # args = actual args
 run = (args, cb) ->
-  readMainConfig (lastName, lastBranch) ->
-    action = args[0]
-    name = args[1] || lastName
-    switch action
-      when "--version" then version cb
-      when "list" then list cb
-      when "help" then help cb
-      when "--help" then help cb
-      when "-h" then help cb
-      when "create"
-        server = args[2]
-        create name, server, cb
-      else
-        readNamedConfig name, (err, config) ->
-          if err? then return cb new Error("Could not find remote name: #{name}")
-          console.log "GOGOGO #{action} #{name}"
-          switch action
-            when "restart" then restart config, cb
-            when "start" then start config, cb
-            when "stop" then stop config, cb
-            when "logs" then logs config, LOGS_LINES, cb
-            when "deploy"
-              branch = args[2] || lastBranch
-              deploy config, branch, cb
-            else
-              cb new Error("Invalid Action #{action}")
+  action = args[0]
+  name = args[1] || lastName
+  switch action
+    when "init" then init cb
+    when "--version" then version cb
+    # when "list" then list cb
+    # when "help" then help cb
+    # when "--help" then help cb
+    # when "-h" then help cb
+    else
+      readMainConfig (err, mainConfig) ->
+        if err then return cb new Error "Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=#{err.message}"
+        server = configServer mainConfig, name
+        if !server then return cb new Error("Invalid Server Name: #{name}")
+        console.log "GOGOGO #{action} #{name}"
+        switch action
+          # when "restart" then restart config, cb
+          # when "start" then start config, cb
+          # when "stop" then stop config, cb
+          # when "logs" then logs config, LOGS_LINES, cb
+          when "deploy"
+            # branch = args[2] || lastBranch
+            branch = args[2]
+            deploy name, branch, mainConfig, cb
+          else
+            cb new Error("Invalid Action #{action}")
 
 ## ACTIONS #########################################################
 
-# sets everything up so gogogo deploy will work
-# does not use a git remote, because we can git push to the url
-create = (name, server, cb) ->
-  console.log "GOGOGO CREATING!"
-  console.log " - name: #{name}"
-  console.log " - server: #{server}"
+# creates the init file for you
+init = (cb) ->
+  initConfigContent = """
+    // example ggg.json. Delete what you don't need
+    module.exports = {
+
+      // services
+      service: "node app.js",
+
+      // cron jobs
+      cron: "* * * * *",
+
+      // deploy targets
+      dev: "deploy@dev.mycompany.com",
+      staging: "deploy@staging.mycompany.com",
+      production: ["deploy@app1.mycompany.com", "deploy@app2.mycompany.com"],
+    }
+  """
+
+  console.log "GOGOGO INITIALIZING!"
+  console.log "*** Written to ggg.json ***"
+  console.log initConfigContent
+
+  fs.writeFile mainConfigPath() + ".js", initConfigContent, 0o0775, cb
+
+
+# PATHS AND HELPERS
+serviceId = (repoName, name) -> repoName + "_" + name
+hookFile = (id) -> "#{repoDir(id)}/.git/hooks/post-receive"
+logFile = (id) -> path.join repoDir(id), "log.txt"
+parentDir = -> "$HOME/" + PREFIX
+upstartFile = (id) -> "/etc/init/#{id}.conf"
+repoDir = (id) -> "#{parentDir()}/#{id}"
+repoUrl = (id, server) -> "ssh://#{server}/~/#{PREFIX}/#{id}"
+serverUser = (server) -> server.replace(/@.*$/, "")
+
+
+# DEPLOY!!
+create = (name, server, mainConfig, cb) ->
 
   reponame process.cwd(), (err, rn) ->
     if err? then return cb err
 
     # names and paths
     id = serviceId rn, name
-    parent = "$HOME/" + PREFIX
-    repo = wd = "#{parent}/#{id}"
-    upstart = "/etc/init/#{id}.conf"
-    log = path.join(repo, "log.txt")
-    hookfile = "#{repo}/.git/hooks/post-receive"
-    deployurl = "ssh://#{server}/~/#{PREFIX}/#{id}"
 
     console.log " - id: #{id}"
-    console.log " - repo: #{repo}"
-    console.log " - remote: #{deployurl}"
+    console.log " - repo: #{repoDir id}"
+    console.log " - remote: #{repoUrl id, server}"
+    console.log " - start: #{configStart mainConfig}"
+    console.log " - install: #{configInstall mainConfig}"
 
     # upstart service
     # we use 'su root -c' because we need to keep our environment variables
@@ -87,10 +136,10 @@ create = (name, server, cb) ->
     service = """
       description '#{id}'
       start on startup
-      chdir #{repo}
+      chdir #{repoDir id}
       respawn
       respawn limit 5 5 
-      exec su root -c 'npm start' >> #{log} 2>&1
+      exec su #{serverUser server} -c '#{configStart mainConfig}' >> #{logFile id} 2>&1
     """
 
     # http://toroid.org/ams/git-website-howto
@@ -100,15 +149,16 @@ create = (name, server, cb) ->
       read oldrev newrev refname
       echo 'GOGOGO checking out:'
       echo \\$newrev
-      cd #{repo}/.git
-      GIT_WORK_TREE=#{repo} git reset --hard \\$newrev || exit 1;
+      cd #{repoDir id}/.git
+      GIT_WORK_TREE=#{repoDir id} git reset --hard \\$newrev || exit 1;
     """
 
     # command
     # denyCurrentBranch ignore allows it to accept pushes without complaining
-    remote = """
-      mkdir -p #{repo}
-      cd #{repo}
+    createRemoteScript = """
+      echo '\nCREATING...'
+      mkdir -p #{repoDir id}
+      cd #{repoDir id}
       echo "Locating git"
       which git 
       if (( $? )); then
@@ -118,65 +168,69 @@ create = (name, server, cb) ->
       git init
       git config receive.denyCurrentBranch ignore
 
-      echo "#{service}" > #{upstart}
+      echo "#{service}" > #{upstartFile id}
 
-      echo "#{hook}" > #{hookfile}
-      chmod +x #{hookfile}
+      echo "#{hook}" > #{hookFile id}
+      chmod +x #{hookFile id}
+      echo "[√] created"
     """
 
-    ssh server, remote, (err) ->
+    ssh server, createRemoteScript, (err) ->
       if err? then return cb err
+      cb()
 
-      # write config
-      config = {name: name, server: server, id: id, repoUrl: deployurl, repo: repo}
-
-      writeConfig namedConfig(name), config, (err) ->
-        if err? then return cb new Error "Could not write config file"
-
-        console.log "-------------------------------"
-        console.log "deploy: 'gogogo deploy #{name} <branch>'"
-
-        writeMainConfig name, null, (err) ->
-          if err? then return cb new Error "Could not write main config"
-
-          cb()
 
 # pushes directly to the url and runs the post stuff by hand. We still use a post-receive hook to checkout the files. 
-deploy = (config, branch, cb) ->
-  console.log "  branch: #{branch}"
-  console.log "PUSHING"
-  local "git", ["push", config.repoUrl, branch, "-f"], (err) ->
+deploy = (name, branch, mainConfig, cb) ->
+
+  server = configServer(mainConfig, name)
+
+  reponame process.cwd(), (err, rn) ->
     if err? then return cb err
 
-    # now install and run
-    command = installCommand(config) + restartCommand(config)
-    ssh config.server, command, (err) ->
-      if err? then return cb err
-      writeMainConfig config.name, branch, (err) ->
-        if err? then return cb err
-        console.log ""
-        command = logs config, 0
+    console.log " - name: #{name}"
+    console.log " - server: #{server}"
+    console.log " - branch: #{branch}"
 
-        # for some reason it takes a while to actually kill it, like 10s
-        kill = -> command.kill()
-        setTimeout kill, 2000
+    # create first
+    create name, server, mainConfig, (err) ->
+      if err? then return cb err
+
+      id = serviceId rn, name
+      console.log "\nPUSHING"
+
+      local "git", ["push", repoUrl(id, server), branch, "-f"], (err) ->
+        if err? then return cb err
+
+        console.log "[√] pushed"
+
+        # now install and run
+        command = installCommand(id, mainConfig) + "\n" + restartCommand(id)
+        ssh server, command, (err) ->
+          if err? then return cb err
+
+          console.log ""
+          command = logs name, server, 1, cb
+
+          # for some reason it takes a while to actually kill it, like 10s
+          kill = -> command.kill()
+          setTimeout kill, 2000
+
 
 ## SIMPLE CONTROL ########################################################
 
-installCommand = (config) -> """
-    echo 'INSTALLING'
-    cd #{config.repo}
-    npm install --unsafe-perm || exit 1;
+installCommand = (id, mainConfig) -> """
+    echo '\nINSTALLING'
+    cd #{repoDir id}
+    #{configInstall mainConfig} || exit 1;
+    echo '[√] installed'
   """
 
-install = (config, cb) ->
-  console.log "INSTALLING"
-  ssh config.server, installCommand(config), cb
-
-restartCommand = (config) -> """
-    echo 'RESTARTING'
-    stop #{config.id}
-    start #{config.id}
+restartCommand = (id) -> """
+    echo '\nRESTARTING'
+    stop #{id}
+    start #{id}
+    echo '[√] restarted'
   """
 
 restart = (config, cb) ->
@@ -207,11 +261,15 @@ help = (cb) ->
   cb()
 
 # this will never exit. You have to Command-C it, or stop the spawned process
-logs = (config, lines) ->
-  log = config.repo + "/log.txt"
-  console.log "Tailing #{log}... Control-C to exit"
-  console.log "-------------------------------------------------------------"
-  ssh config.server, "tail -n #{lines} -f #{log}", ->
+logs = (name, server, lines, cb) ->
+  reponame process.cwd(), (err, rn) ->
+    if err? then return cb err
+    id = serviceId rn, name
+    log = logFile id
+
+    console.log "Tailing #{log}... Control-C to exit"
+    console.log "-------------------------------------------------------------"
+    ssh server, "tail -n #{lines} -f #{log}", ->
 
 list = (cb) ->
   local "ls", [".ggg"], cb
@@ -268,24 +326,39 @@ readConfig = (f, cb) ->
     m = require f
     cb null, m
   catch e
+    console.log "BAD", e
+    throw e
     cb e
 
+class MainConfig
+  constructor: ({@start, @install, @servers}) ->
+    @servers ?= {}
 
-namedConfig = (name) -> path.join process.cwd(), CONFIG, name+".js"
-mainConfig = -> path.join process.cwd(), CONFIG, "_main.js"
+configServer = (cfg, name) -> cfg.servers[name]
+configStart = (cfg) -> cfg.start || throw new Error "You must specify 'start:' in your config file"
+configInstall = (cfg) -> cfg.install || throw new Error "You must specify 'install:' in your config file"
 
-readNamedConfig = (name, cb) ->
-  readConfig namedConfig(name), cb
-
+mainConfigPath = -> path.join process.cwd(), CONFIG
 readMainConfig = (cb) ->
-  readConfig namedConfig("_main"), (err, config) ->
-    if err? then return cb()
-    cb config.name, config.branch
+  readConfig mainConfigPath(), (err, config) ->
+    if err? then return cb err
+    cb null, new MainConfig config
 
-writeMainConfig = (name, branch, cb) ->
-  writeConfig namedConfig("_main"), {name, branch}, cb
 
-serviceId = (repoName, name) -> repoName + "_" + name
+# namedConfig = (name) -> path.join process.cwd(), CONFIG, name+".js"
+# mainConfig = -> path.join process.cwd(), CONFIG, "_main.js"
+
+# readNamedConfig = (name, cb) ->
+#   readConfig namedConfig(name), cb
+
+# readMainConfig = (cb) ->
+#   readConfig namedConfig("_main"), (err, config) ->
+#     if err? then return cb()
+#     cb config.name, config.branch
+
+# writeMainConfig = (name, branch, cb) ->
+#   writeConfig namedConfig("_main"), {name, branch}, cb
+
 
 # add a git remote
 # NOT IN USE (you can push directly to a git url)

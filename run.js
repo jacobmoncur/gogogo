@@ -12,17 +12,34 @@ gogogo
  - deploy sets .ggg/_.js -> branch=master, 
  - runs last "gogogo" command, whatever that was
  - stores to .ggg/_.js
+
+
+REQUIREMENTS
+ - don't require node on the server?
+ + write a bash script on deploy! (YES)
+ - we know the user has node/npm on their LOCAL
+
+CONFIG FILE FORMAT: (json?)
+  ggg.json
+
+  { service: ""
+  , cron: ""
+  , dev: "root@dev.i.tv"
+  , telus: "root@telus"
+  }
 */
 
 
 (function() {
-  var APP, CONFIG, PREFIX, addGitRemote, create, deploy, exec, fs, help, install, installCommand, list, local, logs, mainConfig, namedConfig, path, pckg, readConfig, readMainConfig, readNamedConfig, reponame, restart, restartCommand, run, serviceId, spawn, ssh, start, stop, usage, version, writeConfig, writeMainConfig, _ref;
+  var APP, CONFIG, LOGS_LINES, PREFIX, addGitRemote, create, deploy, exec, fs, help, install, installCommand, list, local, logs, mainConfig, namedConfig, path, pckg, readConfig, readMainConfig, readNamedConfig, reponame, restart, restartCommand, run, serviceId, spawn, ssh, start, stop, usage, version, writeConfig, writeMainConfig, _ref;
 
   APP = "gogogo";
 
   PREFIX = "ggg";
 
-  CONFIG = ".ggg";
+  CONFIG = "ggg.json";
+
+  LOGS_LINES = 40;
 
   _ref = require('child_process'), spawn = _ref.spawn, exec = _ref.exec;
 
@@ -36,6 +53,8 @@ gogogo
       action = args[0];
       name = args[1] || lastName;
       switch (action) {
+        case "init":
+          return init;
         case "--version":
           return version(cb);
         case "list":
@@ -64,7 +83,7 @@ gogogo
               case "stop":
                 return stop(config, cb);
               case "logs":
-                return logs(config, cb);
+                return logs(config, LOGS_LINES, cb);
               case "deploy":
                 branch = args[2] || lastBranch;
                 return deploy(config, branch, cb);
@@ -89,13 +108,13 @@ gogogo
       parent = "$HOME/" + PREFIX;
       repo = wd = "" + parent + "/" + id;
       upstart = "/etc/init/" + id + ".conf";
-      log = "log.txt";
+      log = path.join(repo, "log.txt");
       hookfile = "" + repo + "/.git/hooks/post-receive";
       deployurl = "ssh://" + server + "/~/" + PREFIX + "/" + id;
       console.log(" - id: " + id);
       console.log(" - repo: " + repo);
       console.log(" - remote: " + deployurl);
-      service = "description '" + id + "'\nstart on startup\nchdir " + repo + "\nrespawn\nrespawn limit 5 5 \nexec npm start >> " + log + " 2>&1";
+      service = "description '" + id + "'\nstart on startup\nchdir " + repo + "\nrespawn\nrespawn limit 5 5 \nexec su root -c 'npm start' >> " + log + " 2>&1";
       hook = "read oldrev newrev refname\necho 'GOGOGO checking out:'\necho \\$newrev\ncd " + repo + "/.git\nGIT_WORK_TREE=" + repo + " git reset --hard \\$newrev || exit 1;";
       remote = "mkdir -p " + repo + "\ncd " + repo + "\necho \"Locating git\"\nwhich git \nif (( $? )); then\n    echo \"Could not locate git\"\n    exit 1\nfi\ngit init\ngit config receive.denyCurrentBranch ignore\n\necho \"" + service + "\" > " + upstart + "\n\necho \"" + hook + "\" > " + hookfile + "\nchmod +x " + hookfile;
       return ssh(server, remote, function(err) {
@@ -130,7 +149,7 @@ gogogo
   deploy = function(config, branch, cb) {
     console.log("  branch: " + branch);
     console.log("PUSHING");
-    return local("git", ["push", config.repoUrl, branch], function(err) {
+    return local("git", ["push", config.repoUrl, branch, "-f"], function(err) {
       var command;
       if (err != null) {
         return cb(err);
@@ -140,7 +159,18 @@ gogogo
         if (err != null) {
           return cb(err);
         }
-        return writeMainConfig(config.name, branch, cb);
+        return writeMainConfig(config.name, branch, function(err) {
+          var kill;
+          if (err != null) {
+            return cb(err);
+          }
+          console.log("");
+          command = logs(config, 0);
+          kill = function() {
+            return command.kill();
+          };
+          return setTimeout(kill, 2000);
+        });
       });
     });
   };
@@ -191,12 +221,12 @@ gogogo
     return cb();
   };
 
-  logs = function(config, cb) {
+  logs = function(config, lines) {
     var log;
     log = config.repo + "/log.txt";
     console.log("Tailing " + log + "... Control-C to exit");
     console.log("-------------------------------------------------------------");
-    return ssh(config.server, "tail -n 40 -f " + log, cb);
+    return ssh(config.server, "tail -n " + lines + " -f " + log, function() {});
   };
 
   list = function(cb) {
@@ -222,7 +252,7 @@ gogogo
     }, function(err, stdout, stderr) {
       var url;
       if (err != null) {
-        return cb(null, path.basename(path.dirname(dir)));
+        return cb(null, path.basename(dir));
       } else {
         url = stdout.replace("\n", "");
         return cb(null, path.basename(url).replace(".git", ""));
@@ -307,12 +337,13 @@ gogogo
     process.stderr.on('data', function(data) {
       return console.log(data.toString().replace(/\n$/, ""));
     });
-    return process.on('exit', function(code) {
+    process.on('exit', function(code) {
       if (code) {
         return cb(new Error("Command Failed"));
       }
       return cb();
     });
+    return process;
   };
 
   run(process.argv.slice(2), function(err) {

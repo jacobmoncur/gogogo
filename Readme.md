@@ -30,6 +30,7 @@ Server Requirements
 1. Upstart (included with ubuntu)
 2. SSH Access
 3. Git installed on both local computer and server
+4. node/npm installed on the server
 
 Usage
 -----
