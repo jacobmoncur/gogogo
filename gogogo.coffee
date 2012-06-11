@@ -2,39 +2,13 @@
 CLI to automatically deploy stuff, kind of like heroku. 
 Ubuntu only! (upstart)
 
-gogogo dev master
- - work without "deploy" keyword
-
-gogogo
- - deploy sets .ggg/_.js -> branch=master, 
- - runs last "gogogo" command, whatever that was
- - stores to .ggg/_.js
-
-
-REQUIREMENTS
- - don't require node on the server?
- + write a bash script on deploy! (YES)
- - we know the user has node/npm on their LOCAL
-
-CONFIG FILE FORMAT: (json?)
-  ggg.js (or .coffee!)
-
-  module.exports = { 
-    services: {
-      blah: ""
-      something: ""
-    }
-  , cron: ""
-  , dev: "root@dev.i.tv"
-  , telus: "root@telus"
-  }
-
-
-TODO remaining commands
-TODO init command
-TODO annotate functions (for auto help)
-TODO remember last command again?
 TODO cron
+TODO multiple services
+TODO multiple cron
+
+TODO remember last command again?
+
+TODO multiple servers
 
 ###
 
@@ -92,27 +66,28 @@ run = (args, cb) ->
 # creates the init file for you
 init = (cb) ->
   initConfigContent = """
-    // example ggg.json. Delete what you don't need
+    // example ggg.js. Delete what you don't need
     module.exports = {
 
       // services
-      service: "node app.js",
+      start: "node app.js",
 
-      // cron jobs
-      cron: "* * * * *",
+      // cron jobs (from your app folder)
+      cron: "0 3 * * * node sometask.js",
 
-      // deploy targets
-      dev: "deploy@dev.mycompany.com",
-      staging: "deploy@staging.mycompany.com",
-      production: ["deploy@app1.mycompany.com", "deploy@app2.mycompany.com"],
+      // servers to deploy to
+      servers: {
+        dev: "deploy@dev.mycompany.com",
+        staging: "deploy@staging.mycompany.com"
+      }
     }
   """
 
   console.log "GOGOGO INITIALIZING!"
-  console.log "*** Written to ggg.json ***"
+  console.log "*** Written to ggg.js ***"
   console.log initConfigContent
 
-  fs.writeFile mainConfigPath() + ".js", initConfigContent, 0o0775, cb
+  fs.writeFile mainConfigPath() + ".js", initConfigContent, 0o0755, cb
 
 
 # PATHS AND HELPERS
@@ -124,7 +99,8 @@ upstartFile = (id) -> "/etc/init/#{id}.conf"
 repoDir = (id) -> "#{parentDir()}/#{id}"
 repoUrl = (id, server) -> "ssh://#{server}/~/#{PREFIX}/#{id}"
 serverUser = (server) -> server.replace(/@.*$/, "")
-
+cronFile = (id) -> "/etc/cron.d/#{id}"
+cronLogFile = (id) -> path.join repoDir(id), "cron.txt"
 
 # DEPLOY!!
 create = (name, server, mainConfig, repoName, cb) ->
@@ -149,6 +125,20 @@ create = (name, server, mainConfig, repoName, cb) ->
     respawn limit 5 5 
     exec su #{serverUser server} -c '#{configStart mainConfig}' >> #{logFile id} 2>&1
   """
+
+  # CRON SUPPORT
+  cronRemoteScript = ""
+  cron = configCron mainConfig
+
+  if cron
+    cronScript = """
+      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      #{cron.time} #{serverUser server} cd #{repoDir id} && #{cron.command} >> #{cronLogFile id} 2>&1
+    """
+    cronRemoteScript += """
+      echo "#{cronScript}" > #{cronFile id}
+      chmod 0644 #{cronFile id}
+    """
 
   # http://toroid.org/ams/git-website-howto
   # we don't use the hook for anything, except making sure it checks out.
@@ -181,12 +171,12 @@ create = (name, server, mainConfig, repoName, cb) ->
     echo "#{hook}" > #{hookFile id}
     chmod +x #{hookFile id}
     echo "[√] created"
+    #{cronRemoteScript}
   """
 
   ssh server, createRemoteScript, (err) ->
     if err? then return cb err
     cb()
-
 
 # pushes directly to the url and runs the post stuff by hand. We still use a post-receive hook to checkout the files. 
 deploy = (name, branch, mainConfig, repoName, cb) ->
@@ -339,8 +329,15 @@ readConfig = (f, cb) ->
     cb e
 
 class MainConfig
-  constructor: ({@start, @install, @servers}) ->
+  constructor: ({@start, @install, @cron, @servers}) ->
     @servers ?= {}
+
+# parse 0 1 * * * node stuff.js into: {time: "0 1 * * *", command: "node stuff.js"}
+configCron = (cfg) ->
+  return if not cfg.cron?
+  matches = cfg.cron.match(/([0-9\s\*]+)\s+(.*)/)
+  if not matches? then throw new Error "Invalid Cron: #{cfg.cron}"
+  return {time: matches[1], command: matches[2]}
 
 configServer = (cfg, name) -> cfg.servers[name] || throw new Error "Cannot find server named #{name}. Check your config file"
 configStart = (cfg) -> cfg.start || throw new Error "You must specify 'start:' in your config file"
