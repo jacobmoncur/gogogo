@@ -89,6 +89,17 @@ Help
     gogogo logs <name> — tail remote log
     gogogo list — show available names
 
+### Cron Support
+
+Gogogo currently supports a single cron action.
+
+    module.exports = {
+        cron: "0 3 * * * node something.js"
+        ...
+    }
+
+It will create a script in /etc/cron.d/, set the permissions correctly, and redirect log output to `cron.txt`
+ 
 ### Environment variables
 
 If they are the same no matter which server is deployed, put them in your start script. 
