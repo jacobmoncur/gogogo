@@ -2,12 +2,9 @@
 CLI to automatically deploy stuff, kind of like heroku. 
 Ubuntu only! (upstart)
 
-TODO cron
+TODO remember last command again
 TODO multiple services
 TODO multiple cron
-
-TODO remember last command again?
-
 TODO multiple servers
 
 ###
@@ -100,7 +97,7 @@ repoDir = (id) -> "#{parentDir()}/#{id}"
 repoUrl = (id, server) -> "ssh://#{server}/~/#{PREFIX}/#{id}"
 serverUser = (server) -> server.replace(/@.*$/, "")
 cronFile = (id) -> "/etc/cron.d/#{id}"
-cronLogFile = (id) -> path.join repoDir(id), "cron.txt"
+cronLogFile = (id) -> "cron.txt" # assume already in the directory
 
 # DEPLOY!!
 create = (name, server, mainConfig, repoName, cb) ->
