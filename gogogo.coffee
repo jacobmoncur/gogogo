@@ -245,14 +245,14 @@ version = (cb) ->
 
 help = (cb) ->
   console.log "--------------------------"
-  console.log "gogogo restart [<name>]"
-  console.log "gogogo start [<name>]"
-  console.log "gogogo stop [<name>]"
-  console.log "gogogo logs [<name>] — tail remote log"
-  console.log "gogogo list — show available names"
   console.log "gogogo help"
-  console.log "gogogo deploy [<name>] [<branch>] — deploys branch to named server"
-  console.log "gogogo create <name> <server> - creates a new named server"
+  console.log "gogogo init - creates a ggg.js config file for you"
+  console.log "gogogo deploy <name> <branch> — deploys branch to named server"
+  console.log "gogogo restart <name>"
+  console.log "gogogo start <name>"
+  console.log "gogogo stop <name>"
+  console.log "gogogo logs <name> — tail remote log"
+  console.log "gogogo list — show available names"
   cb()
 
 # this will never exit. You have to Command-C it, or stop the spawned process

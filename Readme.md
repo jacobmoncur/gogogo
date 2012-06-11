@@ -1,9 +1,7 @@
 Go Go Go
 ========
 
-Gogogo is a simple command-line tool designed to let you deploy web applications as easily as possible. It looks for a package.json file to get information about how to run and install your application.
-
-While this uses package.json, it isn't specific to node. You can specify anything in `install` and `start`. These are generic package.json fields supported by npm. 
+Gogogo is a simple command-line tool designed to let you deploy web applications as easily as possible. It puts files into place on any server with upstart and gets it all configured.
 
 ### Goals
 
@@ -20,6 +18,7 @@ Installation
 Change Log
 ----------
 
+* 0.3.0 - custom config file, cron support
 * 0.2.6 - git push force
 * 0.2.5 - Server Environment variables are preserved! Deploy monitors the log for a couple seconds. 
 * 0.2.0 - gogogo list, logs, start, stop, restart, deploy
@@ -30,70 +29,48 @@ Server Requirements
 1. Upstart (included with ubuntu)
 2. SSH Access
 3. Git installed on both local computer and server
-4. node/npm installed on the server
 
 Usage
 -----
 
-### package.json
+In your local repo
 
-Note: these are standard package.json scripts, and can be tested locally with `npm install` and `npm start`
+1. `gogogo init`
 
-    { 
-        "name":"somemodule",
-        ...
-        "scripts": {
-          "install":"anything you want to do before starting, like compiling coffee scripts",
-          "start":"command to start your server"
-        }
+2. edit ggg.js:
+
+module.exports = {
+
+    # how to start your app
+    start: "PORT=5333 node app.js",
+
+    # how to install/configure your app
+    install: "npm install",
+
+    servers: {
+        dev: "deploy@dev.mycompany.com"
     }
+}
 
-### in your local repo
+3. gogogo deploy dev master
 
-    gogogo create <name> <server>
-    git push <name> <branch>
+### Redeploy
 
-### example
-
-package.json
-
-    { 
-        "name":"somemodule",
-        ...
-        "scripts": {
-          "install":"coffee -c .",
-          "start":"PORT=5333 node app.js"
-        }
-    }
-
-in your local terminal
-
-    # you only need to run this once
-    gogogo create test someuser@example.com
-
-    # now deploy over and over
-    gogogo deploy test master
-
-    # change some stuff
+    # change some stuff and commit
     ...
 
     # deploy again
     gogogo deploy test master
     
-    # it remembers your last name and branch
-    gogogo deploy
-
 Limitations
 -----------
 
 1. Only works on ubuntu (requires upstart to be installed)
-2. Can't handle scheduled tasks yet (cron)
-3. You must change the port in either the code or an environment variable to run the same app twice on the same server
+2. You must change the port in either the code or an environment variable to run the same app twice on the same server
 
 Roadmap
 -------
 
-* cron
 * gogogo rm
 * gogogo ps
 * ability to specify sub-folders that contain package.json files
@@ -104,17 +81,13 @@ Help
 ### Actions
 
     gogogo help
-
-    gogogo create <name> <server> 
-    gogogo deploy [<name>] [<branch>]
-
-    gogogo restart [<name>]
-    gogogo start [<name>]
-    gogogo stop [<name>]
-
-    gogogo logs [<name>]
-
-    gogogo list 
+    gogogo init - creates a ggg.js config file for you
+    gogogo deploy <name> <branch> — deploys branch to named server
+    gogogo restart <name>
+    gogogo start <name>
+    gogogo stop <name>
+    gogogo logs <name> — tail remote log
+    gogogo list — show available names
 
 ### Environment variables
 
@@ -129,33 +102,39 @@ If they refer to something about the server you are on, put them in /etc/environ
 
 ### Multiple servers
 
-To deploy to multiple servers, just run `gogogo create` with the different servers and pick a unique `name` each time.
+To deploy to multiple servers, just add multiple servers to the config file
 
-    gogogo create test user@test.example.com
-    gogogo create staging user@staging.example.com
+    // ggg.js
+    module.exports = {
+        servers: {
+            dev: "deploy@dev.mycompany.com",
+            staging: "deploy@staging.mycompany.com"
+        }
+    }
 
-    gogogo deploy test master
+Then deploy to them separately
+
+    gogogo deploy dev master
     gogogo deploy staging master
 
 ### Multiple branches on the same server
 
 You can deploy any branch over your old remote by pushing to it. To have multiple versions of an app running at the same time, call `gogogo create` with different names and the same server.
 
-    gogogo create test user@test.example.com
-    gogogo create featurex user@test.example.com
-    
-    gogogo deploy test master
+    // ggg.js
+    module.exports = {
+        servers: {
+            dev: "deploy@dev.mycompany.com",
+            featurex: "deploy@dev.mycompany.com"
+        }
+    }
+
+Then deploy to them separately
+
+    gogogo deploy dev master
     gogogo deploy featurex featurex
 
 Note that for web servers you'll want to change the port in your featurex branch or it will conflict.
-
-### Remembers Last Name and Branch
-
-You can leave the name and branch off any command and it will use the last name and branch from `gogogo deploy`
-
-    gogogo deploy
-    gogogo restart
-    gogogo logs
 
 ### Reinstall / Upgrade
 
@@ -163,7 +142,7 @@ To reinstall, run `npm install -g gogogo` again, then redo the create step in yo
 
 ### Gitignore
 
-I recommend you ignore .ggg/_main.js but that you check the other config files in, so anyone using the repository can deploy as long as they have ssh access to the server
+Commit ggg.js to your repo, so anyone using the repo can deploy as long as they have ssh access to the server.
 
 
 
