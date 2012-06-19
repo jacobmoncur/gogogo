@@ -69,6 +69,9 @@ init = (cb) ->
       // services
       start: "node app.js",
 
+      // install
+      install: "npm install",
+
       // cron jobs (from your app folder)
       cron: "0 3 * * * node sometask.js",
 
