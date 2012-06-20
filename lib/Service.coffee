@@ -32,7 +32,7 @@ class Service
     @upstartFile = "/etc/init/#{@id}.conf"
 
     @cronFile = "/etc/cron.d/#{@id}"
-    @cronLogFiles = "cron.txt"
+    @cronLogFile = "cron.txt"
 
     @serverUser = @server.replace(/@.*$/, "")
 
