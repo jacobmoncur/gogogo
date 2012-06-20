@@ -12,7 +12,7 @@ TODO multiple servers
 
 
 (function() {
-  var CONFIG, LOGS_LINES, MainConfig, Service, VERSION, exec, finish, fs, getConfigRepo, getService, init, list, mainConfigPath, path, program, reponame, writeConfig;
+  var CONFIG, HostGroup, LOGS_LINES, MainConfig, Service, VERSION, exec, finish, fs, getConfigRepo, getService, init, list, mainConfigPath, path, program, reponame, writeConfig;
 
   CONFIG = "ggg";
 
@@ -29,6 +29,8 @@ TODO multiple servers
   program = require('commander');
 
   MainConfig = require("./lib/MainConfig");
+
+  HostGroup = require("./lib/HostGroup");
 
   Service = require("./lib/Service");
 
@@ -82,7 +84,7 @@ TODO multiple servers
         return finish(err);
       }
       lines = program.lines || LOGS_LINES;
-      return service.logs(lines, finish);
+      return service.serverLogs(lines, finish);
     });
   });
 
@@ -106,7 +108,7 @@ TODO multiple servers
 
   init = function(cb) {
     var initConfigContent;
-    initConfigContent = "// example ggg.js. Delete what you don't need\nmodule.exports = {\n\n  // services\n  start: \"node app.js\",\n\n  // install\n  install: \"npm install\",\n\n  // cron jobs (from your app folder)\n  cron: \"0 3 * * * node sometask.js\",\n\n  // servers to deploy to\n  servers: {\n    dev: \"deploy@dev.mycompany.com\",\n    staging: \"deploy@staging.mycompany.com\"\n  }\n}";
+    initConfigContent = "// example ggg.js. Delete what you don't need\nmodule.exports = {\n\n  // services\n  start: \"node app.js\",\n\n  // install\n  install: \"npm install\",\n\n  // cron jobs (from your app folder)\n  cron: \"0 3 * * * node sometask.js\",\n\n  // servers to deploy to\n  servers: {\n    dev: \"deploy@dev.mycompany.com\",\n    staging: [\"deploy@staging.mycompany.com\", \"deploy@staging2.mycompany.com\"]\n  }\n}";
     console.log("GOGOGO INITIALIZING!");
     console.log("*** Written to ggg.js ***");
     console.log(initConfigContent);
@@ -158,15 +160,20 @@ TODO multiple servers
 
   getService = function(name, cb) {
     return getConfigRepo(function(err, repoName, mainConfig) {
-      var server, service;
+      var servers, service;
       if (err != null) {
         return cb(err);
       }
-      server = mainConfig.getServerByName(name);
-      if (!server) {
+      servers = mainConfig.getServerByName(name);
+      if (!servers) {
         return cb(new Error("Invalid Server Name: " + name));
       }
-      service = new Service(name, server, mainConfig, repoName);
+      service = null;
+      if (servers.length > 1) {
+        service = new HostGroup(name, servers, mainConfig, repoName);
+      } else {
+        service = new Service(name, servers[0], mainConfig, repoName);
+      }
       return cb(null, service);
     });
   };

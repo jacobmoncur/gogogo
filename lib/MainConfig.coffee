@@ -14,7 +14,11 @@ readConfig = (f, cb) ->
 
 class MainConfig
 
-  constructor: ({@start, @install, @cron, @servers}) ->
+  constructor: ({@start, @install, @cron, servers}) ->
+    # normalize to an array for multi server deploys
+    @servers = []
+    for name, server of servers
+      @servers[name] = if Array.isArray(server) then server else [server]
 
   getServerByName: (name) ->
     @servers[name] || throw new Error "Cannot find server named #{name}. Check your config file"

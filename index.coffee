@@ -21,6 +21,7 @@ path = require 'path'
 program = require 'commander'
 
 MainConfig = require "./lib/MainConfig"
+HostGroup = require "./lib/HostGroup"
 Service = require "./lib/Service"
 
 program
@@ -78,7 +79,7 @@ program
     getService name, (err, service) ->
       return finish err if err?
       lines = program.lines || LOGS_LINES
-      service.logs lines, finish
+      service.serverLogs lines, finish
 
 program
   .command("list")
@@ -121,7 +122,7 @@ init = (cb) ->
       // servers to deploy to
       servers: {
         dev: "deploy@dev.mycompany.com",
-        staging: "deploy@staging.mycompany.com"
+        staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"]
       }
     }
   """
@@ -170,10 +171,15 @@ getService = (name, cb) ->
   getConfigRepo (err, repoName, mainConfig) ->
     return cb err if err?
 
-    server = mainConfig.getServerByName name
-    if !server then return cb new Error("Invalid Server Name: #{name}")
+    servers = mainConfig.getServerByName name
+    if !servers then return cb new Error("Invalid Server Name: #{name}")
 
-    service = new Service name, server, mainConfig, repoName
+    service = null
+    
+    if servers.length > 1
+      service = new HostGroup name, servers, mainConfig, repoName
+    else
+      service = new Service name, servers[0], mainConfig, repoName
 
     cb null, service
 
