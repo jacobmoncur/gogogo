@@ -93,6 +93,11 @@ TODO multiple servers
     });
   });
 
+  program.command("help").description("display this help").action(function() {
+    console.log(program.helpInformation());
+    return finish();
+  });
+
   program.command("*").action(function() {
     return finish(new Error("bad command!"));
   });

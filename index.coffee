@@ -89,6 +89,13 @@ program
       list mainConfig, finish
 
 program
+  .command("help")
+  .description("display this help")
+  .action ->
+    console.log program.helpInformation()
+    finish()
+
+program
   .command("*")
   .action ->
     finish new Error "bad command!"
