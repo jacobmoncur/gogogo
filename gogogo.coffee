@@ -18,45 +18,101 @@ LOGS_LINES = 40
 {spawn, exec} = require 'child_process'
 fs = require 'fs'
 path = require 'path'
+program = require 'commander'
+
+getConfig = (cb) ->
+  reponame process.cwd(), (err, repoName) ->
+    return cb err if err?
+    readMainConfig (err, mainConfig) ->
+      if err then return cb new Error "Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=#{err.message}"
+
+      cb null, repoName, mainConfig
+
+getConfigServer = (cb) ->
+  getConfig (err, repoName, config) ->
+    return cb err if err?
+
+    server = configServer mainConfig, name
+    if !server then return cb new Error("Invalid Server Name: #{name}")
+
+    cb null, repoName, config, server
+
+finish = (err) ->
+  if err?
+    console.log "!!! " + err.message
+    process.exit 1
+  console.log "OK"
 
 
-## RUN #############################################################
+program
+  .version("0.3.1")
 
-# figure out what to call, and with which arguments
-# args = actual args
-run = (args, cb) ->
-  action = args[0]
-  name = args[1]
-  switch action
-    when undefined then help cb
-    when "init" then init cb
-    when "--version" then version cb
-    when "help" then help cb
-    when "--help" then help cb
-    when "-h" then help cb
-    else
-      reponame process.cwd(), (err, repoName) ->
-        if err? then return cb err
-        readMainConfig (err, mainConfig) ->
-          if err then return cb new Error "Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=#{err.message}"
-          switch action
-            when "list" then list mainConfig, cb
-            else
-              server = configServer mainConfig, name
-              if !server then return cb new Error("Invalid Server Name: #{name}")
-              console.log "GOGOGO #{action} #{name}"
+program
+  .command("init")
+  .description("creates a ggg.js config file for you")
+  .action ->
+    init finish
 
-              switch action
-                when "logs" then logs name, server, repoName, LOGS_LINES, cb
-                when "restart" then restart name, server, repoName, cb
-                when "start" then start name, server, repoName, cb
-                when "stop" then stop name, server, repoName, cb
-                when "deploy"
-                  # branch = args[2] || lastBranch
-                  branch = args[2]
-                  deploy name, branch, mainConfig, repoName, cb
-                else
-                  cb new Error("Invalid Action #{action}")
+
+program
+  .command("deploy <name> [branch]")
+  .description("deploys a branch (defaults to origin/master) to named server")
+  .action (name, branch) ->
+    getConfigServer (err, repoName, mainConfig, server) ->
+      return finish err if err?
+
+      branch = branch || "origin/master"
+
+      deploy name, branch, mainConfig, repoName, finish
+
+
+program
+  .command("restart <name>")
+  .description("restarts named server")
+  .action (name) ->
+    getConfigServer (err, repoName, mainConfig, server) ->
+      return finish err if err?
+
+      restart name, server, repoName, finish
+
+
+program
+  .command("start <name>")
+  .description("starts named server")
+  .action (name) ->
+    getConfigServer (err, repoName, mainConfig, server) ->
+      return finish err if err?
+      start name, server, repoName, finish
+
+program
+  .command("stop <name>")
+  .description("stops named server")
+  .action (name) ->
+    getConfigServer (err, repoName, mainConfig, server) ->
+      return finish err if err?
+      stop name, server, repoName, finish
+
+program
+  .command("logs <name>")
+  .description("Logs #{LOGS_LINES} lines of named servers log files")
+  .action (name) ->
+    getConfigServer (err, repoName, mainConfig, server) ->
+      return finish err if err?
+      logs name, server, repoName, LOGS_LINES, finish
+
+program
+  .command("list")
+  .description("lists all the servers")
+  .action ->
+    getConfig (err, repoName, mainConfig) ->
+      return finish err if err?
+
+      list mainConfig, finish
+
+program
+  .command("*")
+  .action ->
+    finish new Error "bad command!"
 
 ## ACTIONS #########################################################
 
@@ -272,30 +328,6 @@ list = (mainConfig, cb) ->
   console.log " - " + configServerNames(mainConfig).join("\n - ")
 
 
-usage = -> console.log "Usage: gogogo create NAME USER@SERVER"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ## HELPERS #################################################
 
 pckg = (cb) ->
@@ -398,9 +430,5 @@ local = (command, args, cb) ->
 
 
 # RUN THE THING
-run process.argv.slice(2), (err) ->
-  if err?
-    console.log "!!! " + err.message
-    process.exit 1
-  console.log "OK"
+program.parse(process.argv)
 

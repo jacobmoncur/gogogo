@@ -5,39 +5,21 @@
 CLI to automatically deploy stuff, kind of like heroku. 
 Ubuntu only! (upstart)
 
-gogogo dev master
- - work without "deploy" keyword
-
-gogogo
- - deploy sets .ggg/_.js -> branch=master, 
- - runs last "gogogo" command, whatever that was
- - stores to .ggg/_.js
-
-
-REQUIREMENTS
- - don't require node on the server?
- + write a bash script on deploy! (YES)
- - we know the user has node/npm on their LOCAL
-
-CONFIG FILE FORMAT: (json?)
-  ggg.json
-
-  { service: ""
-  , cron: ""
-  , dev: "root@dev.i.tv"
-  , telus: "root@telus"
-  }
+TODO remember last command again
+TODO multiple services
+TODO multiple cron
+TODO multiple servers
 */
 
 
 (function() {
-  var APP, CONFIG, LOGS_LINES, PREFIX, addGitRemote, create, deploy, exec, fs, help, install, installCommand, list, local, logs, mainConfig, namedConfig, path, pckg, readConfig, readMainConfig, readNamedConfig, reponame, restart, restartCommand, run, serviceId, spawn, ssh, start, stop, usage, version, writeConfig, writeMainConfig, _ref;
+  var APP, CONFIG, LOGS_LINES, MainConfig, PREFIX, addGitRemote, configCron, configInstall, configServer, configServerNames, configStart, create, cronFile, cronLogFile, deploy, exec, finish, fs, getConfig, getConfigServer, help, hookFile, init, installCommand, list, local, logFile, logs, mainConfigPath, parentDir, path, pckg, program, readConfig, readMainConfig, repoDir, repoUrl, reponame, restart, restartCommand, serverUser, serviceId, spawn, ssh, start, stop, upstartFile, version, writeConfig, _ref;
 
   APP = "gogogo";
 
   PREFIX = "ggg";
 
-  CONFIG = "ggg.json";
+  CONFIG = "ggg";
 
   LOGS_LINES = 40;
 
@@ -47,125 +29,210 @@ CONFIG FILE FORMAT: (json?)
 
   path = require('path');
 
-  run = function(args, cb) {
-    return readMainConfig(function(lastName, lastBranch) {
-      var action, name, server;
-      action = args[0];
-      name = args[1] || lastName;
-      switch (action) {
-        case "init":
-          return init;
-        case "--version":
-          return version(cb);
-        case "list":
-          return list(cb);
-        case "help":
-          return help(cb);
-        case "--help":
-          return help(cb);
-        case "-h":
-          return help(cb);
-        case "create":
-          server = args[2];
-          return create(name, server, cb);
-        default:
-          return readNamedConfig(name, function(err, config) {
-            var branch;
-            if (err != null) {
-              return cb(new Error("Could not find remote name: " + name));
-            }
-            console.log("GOGOGO " + action + " " + name);
-            switch (action) {
-              case "restart":
-                return restart(config, cb);
-              case "start":
-                return start(config, cb);
-              case "stop":
-                return stop(config, cb);
-              case "logs":
-                return logs(config, LOGS_LINES, cb);
-              case "deploy":
-                branch = args[2] || lastBranch;
-                return deploy(config, branch, cb);
-              default:
-                return cb(new Error("Invalid Action " + action));
-            }
-          });
-      }
-    });
-  };
+  program = require('commander');
 
-  create = function(name, server, cb) {
-    console.log("GOGOGO CREATING!");
-    console.log(" - name: " + name);
-    console.log(" - server: " + server);
-    return reponame(process.cwd(), function(err, rn) {
-      var deployurl, hook, hookfile, id, log, parent, remote, repo, service, upstart, wd;
+  getConfig = function(cb) {
+    return reponame(process.cwd(), function(err, repoName) {
       if (err != null) {
         return cb(err);
       }
-      id = serviceId(rn, name);
-      parent = "$HOME/" + PREFIX;
-      repo = wd = "" + parent + "/" + id;
-      upstart = "/etc/init/" + id + ".conf";
-      log = path.join(repo, "log.txt");
-      hookfile = "" + repo + "/.git/hooks/post-receive";
-      deployurl = "ssh://" + server + "/~/" + PREFIX + "/" + id;
-      console.log(" - id: " + id);
-      console.log(" - repo: " + repo);
-      console.log(" - remote: " + deployurl);
-      service = "description '" + id + "'\nstart on startup\nchdir " + repo + "\nrespawn\nrespawn limit 5 5 \nexec su root -c 'npm start' >> " + log + " 2>&1";
-      hook = "read oldrev newrev refname\necho 'GOGOGO checking out:'\necho \\$newrev\ncd " + repo + "/.git\nGIT_WORK_TREE=" + repo + " git reset --hard \\$newrev || exit 1;";
-      remote = "mkdir -p " + repo + "\ncd " + repo + "\necho \"Locating git\"\nwhich git \nif (( $? )); then\n    echo \"Could not locate git\"\n    exit 1\nfi\ngit init\ngit config receive.denyCurrentBranch ignore\n\necho \"" + service + "\" > " + upstart + "\n\necho \"" + hook + "\" > " + hookfile + "\nchmod +x " + hookfile;
-      return ssh(server, remote, function(err) {
-        var config;
-        if (err != null) {
-          return cb(err);
+      return readMainConfig(function(err, mainConfig) {
+        if (err) {
+          return cb(new Error("Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=" + err.message));
         }
-        config = {
-          name: name,
-          server: server,
-          id: id,
-          repoUrl: deployurl,
-          repo: repo
-        };
-        return writeConfig(namedConfig(name), config, function(err) {
-          if (err != null) {
-            return cb(new Error("Could not write config file"));
-          }
-          console.log("-------------------------------");
-          console.log("deploy: 'gogogo deploy " + name + " <branch>'");
-          return writeMainConfig(name, null, function(err) {
-            if (err != null) {
-              return cb(new Error("Could not write main config"));
-            }
-            return cb();
-          });
-        });
+        return cb(null, repoName, mainConfig);
       });
     });
   };
 
-  deploy = function(config, branch, cb) {
-    console.log("  branch: " + branch);
-    console.log("PUSHING");
-    return local("git", ["push", config.repoUrl, branch, "-f"], function(err) {
-      var command;
+  getConfigServer = function(cb) {
+    return getConfig(function(err, repoName, config) {
+      var server;
       if (err != null) {
         return cb(err);
       }
-      command = installCommand(config) + restartCommand(config);
-      return ssh(config.server, command, function(err) {
+      server = configServer(mainConfig, name);
+      if (!server) {
+        return cb(new Error("Invalid Server Name: " + name));
+      }
+      return cb(null, repoName, config, server);
+    });
+  };
+
+  finish = function(err) {
+    if (err != null) {
+      console.log("!!! " + err.message);
+      process.exit(1);
+    }
+    return console.log("OK");
+  };
+
+  program.version("0.3.1");
+
+  program.command("init").description("creates a ggg.js config file for you").action(function() {
+    return init(finish);
+  });
+
+  program.command("deploy <name> [branch]").description("deploys a branch (defaults to origin/master) to named server").action(function(name, branch) {
+    return getConfigServer(function(err, repoName, mainConfig, server) {
+      if (err != null) {
+        return finish(err);
+      }
+      branch = branch || "origin/master";
+      return deploy(name, branch, mainConfig, repoName, finish);
+    });
+  });
+
+  program.command("restart <name>").description("restarts named server").action(function(name) {
+    return getConfigServer(function(err, repoName, mainConfig, server) {
+      if (err != null) {
+        return finish(err);
+      }
+      return restart(name, server, repoName, finish);
+    });
+  });
+
+  program.command("start <name>").description("starts named server").action(function(name) {
+    return getConfigServer(function(err, repoName, mainConfig, server) {
+      if (err != null) {
+        return finish(err);
+      }
+      return start(name, server, repoName, finish);
+    });
+  });
+
+  program.command("stop <name>").description("stops named server").action(function(name) {
+    return getConfigServer(function(err, repoName, mainConfig, server) {
+      if (err != null) {
+        return finish(err);
+      }
+      return stop(name, server, repoName, finish);
+    });
+  });
+
+  program.command("logs <name>").description("Logs " + LOGS_LINES + " lines of named servers log files").action(function(name) {
+    return getConfigServer(function(err, repoName, mainConfig, server) {
+      if (err != null) {
+        return finish(err);
+      }
+      return logs(name, server, repoName, LOGS_LINES, finish);
+    });
+  });
+
+  program.command("list").description("lists all the servers").action(function() {
+    return getConfig(function(err, repoName, mainConfig) {
+      if (err != null) {
+        return finish(err);
+      }
+      return list(mainConfig, finish);
+    });
+  });
+
+  program.command("*").action(function() {
+    return finish(new Error("bad command!"));
+  });
+
+  init = function(cb) {
+    var initConfigContent;
+    initConfigContent = "// example ggg.js. Delete what you don't need\nmodule.exports = {\n\n  // services\n  start: \"node app.js\",\n\n  // install\n  install: \"npm install\",\n\n  // cron jobs (from your app folder)\n  cron: \"0 3 * * * node sometask.js\",\n\n  // servers to deploy to\n  servers: {\n    dev: \"deploy@dev.mycompany.com\",\n    staging: \"deploy@staging.mycompany.com\"\n  }\n}";
+    console.log("GOGOGO INITIALIZING!");
+    console.log("*** Written to ggg.js ***");
+    console.log(initConfigContent);
+    return fs.writeFile(mainConfigPath() + ".js", initConfigContent, 0x1ed, cb);
+  };
+
+  serviceId = function(repoName, name) {
+    return repoName + "_" + name;
+  };
+
+  hookFile = function(id) {
+    return "" + (repoDir(id)) + "/.git/hooks/post-receive";
+  };
+
+  logFile = function(id) {
+    return path.join(repoDir(id), "log.txt");
+  };
+
+  parentDir = function() {
+    return "$HOME/" + PREFIX;
+  };
+
+  upstartFile = function(id) {
+    return "/etc/init/" + id + ".conf";
+  };
+
+  repoDir = function(id) {
+    return "" + (parentDir()) + "/" + id;
+  };
+
+  repoUrl = function(id, server) {
+    return "ssh://" + server + "/~/" + PREFIX + "/" + id;
+  };
+
+  serverUser = function(server) {
+    return server.replace(/@.*$/, "");
+  };
+
+  cronFile = function(id) {
+    return "/etc/cron.d/" + id;
+  };
+
+  cronLogFile = function(id) {
+    return "cron.txt";
+  };
+
+  create = function(name, server, mainConfig, repoName, cb) {
+    var createRemoteScript, cron, cronRemoteScript, cronScript, hook, id, service;
+    id = serviceId(repoName, name);
+    console.log(" - id: " + id);
+    console.log(" - repo: " + (repoDir(id)));
+    console.log(" - remote: " + (repoUrl(id, server)));
+    console.log(" - start: " + (configStart(mainConfig)));
+    console.log(" - install: " + (configInstall(mainConfig)));
+    service = "description '" + id + "'\nstart on startup\nchdir " + (repoDir(id)) + "\nrespawn\nrespawn limit 5 5 \nexec su " + (serverUser(server)) + " -c '" + (configStart(mainConfig)) + "' >> " + (logFile(id)) + " 2>&1";
+    cronRemoteScript = "";
+    cron = configCron(mainConfig);
+    if (cron) {
+      cronScript = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n" + cron.time + " " + (serverUser(server)) + " cd " + (repoDir(id)) + " && " + cron.command + " >> " + (cronLogFile(id)) + " 2>&1";
+      cronRemoteScript += "echo \"" + cronScript + "\" > " + (cronFile(id)) + "\nchmod 0644 " + (cronFile(id));
+    }
+    hook = "read oldrev newrev refname\necho 'GOGOGO checking out:'\necho \\$newrev\ncd " + (repoDir(id)) + "/.git\nGIT_WORK_TREE=" + (repoDir(id)) + " git reset --hard \\$newrev || exit 1;";
+    createRemoteScript = "echo '\nCREATING...'\nmkdir -p " + (repoDir(id)) + "\ncd " + (repoDir(id)) + "\necho \"Locating git\"\nwhich git \nif (( $? )); then\n    echo \"Could not locate git\"\n    exit 1\nfi\ngit init\ngit config receive.denyCurrentBranch ignore\n\necho \"" + service + "\" > " + (upstartFile(id)) + "\n\necho \"" + hook + "\" > " + (hookFile(id)) + "\nchmod +x " + (hookFile(id)) + "\necho \"[√] created\"\n" + cronRemoteScript;
+    return ssh(server, createRemoteScript, function(err) {
+      if (err != null) {
+        return cb(err);
+      }
+      return cb();
+    });
+  };
+
+  deploy = function(name, branch, mainConfig, repoName, cb) {
+    var server;
+    server = configServer(mainConfig, name);
+    console.log(" - name: " + name);
+    console.log(" - server: " + server);
+    console.log(" - branch: " + branch);
+    return create(name, server, mainConfig, repoName, function(err) {
+      var id;
+      if (err != null) {
+        return cb(err);
+      }
+      id = serviceId(repoName, name);
+      console.log("\nPUSHING");
+      return local("git", ["push", repoUrl(id, server), branch, "-f"], function(err) {
+        var command;
         if (err != null) {
           return cb(err);
         }
-        return writeMainConfig(config.name, branch, function(err) {
+        console.log("[√] pushed");
+        command = installCommand(id, mainConfig) + "\n" + restartCommand(id);
+        return ssh(server, command, function(err) {
           var kill;
           if (err != null) {
             return cb(err);
           }
           console.log("");
-          command = logs(config, 0);
+          command = logs(name, server, repoName, 1, cb);
           kill = function() {
             return command.kill();
           };
@@ -175,31 +242,32 @@ CONFIG FILE FORMAT: (json?)
     });
   };
 
-  installCommand = function(config) {
-    return "echo 'INSTALLING'\ncd " + config.repo + "\nnpm install --unsafe-perm || exit 1;";
+  installCommand = function(id, mainConfig) {
+    return "echo '\nINSTALLING'\ncd " + (repoDir(id)) + "\n" + (configInstall(mainConfig)) + " || exit 1;\necho '[√] installed'";
   };
 
-  install = function(config, cb) {
-    console.log("INSTALLING");
-    return ssh(config.server, installCommand(config), cb);
+  restartCommand = function(id) {
+    return "echo '\nRESTARTING'\nstop " + id + "\nstart " + id + "\necho '[√] restarted'";
   };
 
-  restartCommand = function(config) {
-    return "echo 'RESTARTING'\nstop " + config.id + "\nstart " + config.id;
+  restart = function(name, server, repoName, cb) {
+    var id;
+    id = serviceId(repoName, name);
+    return ssh(server, restartCommand(id), cb);
   };
 
-  restart = function(config, cb) {
-    return ssh(config.server, restartCommand(config), cb);
-  };
-
-  stop = function(config, cb) {
+  stop = function(name, server, repoName, cb) {
+    var id;
     console.log("STOPPING");
-    return ssh(config.server, "stop " + config.id + ";", cb);
+    id = serviceId(repoName, name);
+    return ssh(server, "stop " + id + ";", cb);
   };
 
-  start = function(config, cb) {
+  start = function(name, server, repoName, cb) {
+    var id;
     console.log("STARTING");
-    return ssh(config.server, "start " + config.id + ";", cb);
+    id = serviceId(repoName, name);
+    return ssh(server, "start " + id + ";", cb);
   };
 
   version = function(cb) {
@@ -210,31 +278,29 @@ CONFIG FILE FORMAT: (json?)
 
   help = function(cb) {
     console.log("--------------------------");
-    console.log("gogogo restart [<name>]");
-    console.log("gogogo start [<name>]");
-    console.log("gogogo stop [<name>]");
-    console.log("gogogo logs [<name>] — tail remote log");
-    console.log("gogogo list — show available names");
     console.log("gogogo help");
-    console.log("gogogo deploy [<name>] [<branch>] — deploys branch to named server");
-    console.log("gogogo create <name> <server> - creates a new named server");
+    console.log("gogogo init - creates a ggg.js config file for you");
+    console.log("gogogo deploy <name> <branch> — deploys branch to named server");
+    console.log("gogogo restart <name>");
+    console.log("gogogo start <name>");
+    console.log("gogogo stop <name>");
+    console.log("gogogo logs <name> — tail remote log");
+    console.log("gogogo list — show available names");
     return cb();
   };
 
-  logs = function(config, lines) {
-    var log;
-    log = config.repo + "/log.txt";
+  logs = function(name, server, repoName, lines, cb) {
+    var id, log;
+    id = serviceId(repoName, name);
+    log = logFile(id);
     console.log("Tailing " + log + "... Control-C to exit");
     console.log("-------------------------------------------------------------");
-    return ssh(config.server, "tail -n " + lines + " -f " + log, function() {});
+    return ssh(server, "tail -n " + lines + " -f " + log, function() {});
   };
 
-  list = function(cb) {
-    return local("ls", [".ggg"], cb);
-  };
-
-  usage = function() {
-    return console.log("Usage: gogogo create NAME USER@SERVER");
+  list = function(mainConfig, cb) {
+    console.log("GOGOGO servers (see ggg.js)");
+    return console.log(" - " + configServerNames(mainConfig).join("\n - "));
   };
 
   pckg = function(cb) {
@@ -272,40 +338,75 @@ CONFIG FILE FORMAT: (json?)
       m = require(f);
       return cb(null, m);
     } catch (e) {
+      console.log("BAD", e);
+      throw e;
       return cb(e);
     }
   };
 
-  namedConfig = function(name) {
-    return path.join(process.cwd(), CONFIG, name + ".js");
+  MainConfig = (function() {
+
+    MainConfig.name = 'MainConfig';
+
+    function MainConfig(_arg) {
+      this.start = _arg.start, this.install = _arg.install, this.cron = _arg.cron, this.servers = _arg.servers;
+      if (this.servers == null) {
+        this.servers = {};
+      }
+    }
+
+    return MainConfig;
+
+  })();
+
+  configCron = function(cfg) {
+    var matches;
+    if (!(cfg.cron != null)) {
+      return;
+    }
+    matches = cfg.cron.match(/([0-9\s\*]+)\s+(.*)/);
+    if (!(matches != null)) {
+      throw new Error("Invalid Cron: " + cfg.cron);
+    }
+    return {
+      time: matches[1],
+      command: matches[2]
+    };
   };
 
-  mainConfig = function() {
-    return path.join(process.cwd(), CONFIG, "_main.js");
+  configServer = function(cfg, name) {
+    return cfg.servers[name] || (function() {
+      throw new Error("Cannot find server named " + name + ". Check your config file");
+    })();
   };
 
-  readNamedConfig = function(name, cb) {
-    return readConfig(namedConfig(name), cb);
+  configStart = function(cfg) {
+    return cfg.start || (function() {
+      throw new Error("You must specify 'start:' in your config file");
+    })();
+  };
+
+  configInstall = function(cfg) {
+    return cfg.install || (function() {
+      throw new Error("You must specify 'install:' in your config file");
+    })();
+  };
+
+  configServerNames = function(cfg) {
+    return Object.keys(cfg.servers);
+  };
+
+  mainConfigPath = function() {
+    return path.join(process.cwd(), CONFIG);
   };
 
   readMainConfig = function(cb) {
-    return readConfig(namedConfig("_main"), function(err, config) {
+    return readConfig(mainConfigPath(), function(err, config) {
       if (err != null) {
-        return cb();
+        return cb(err);
       }
-      return cb(config.name, config.branch);
+      return cb(null, new MainConfig(config));
     });
-  };
-
-  writeMainConfig = function(name, branch, cb) {
-    return writeConfig(namedConfig("_main"), {
-      name: name,
-      branch: branch
-    }, cb);
-  };
-
-  serviceId = function(repoName, name) {
-    return repoName + "_" + name;
   };
 
   addGitRemote = function(name, url, cb) {
@@ -346,12 +447,6 @@ CONFIG FILE FORMAT: (json?)
     return process;
   };
 
-  run(process.argv.slice(2), function(err) {
-    if (err != null) {
-      console.log("!!! " + err.message);
-      process.exit(1);
-    }
-    return console.log("OK");
-  });
+  program.parse(process.argv);
 
 }).call(this);
