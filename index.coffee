@@ -16,12 +16,11 @@ VERSION = "0.3.1"
 
 fs = require 'fs'
 path = require 'path'
-root = path.dirname fs.realpathSync(__filename)
 
 program = require 'commander'
 
-MainConfig = require root + "lib/MainConfig"
-Service = require root + "lib/Service"
+MainConfig = require "./lib/MainConfig"
+Service = require "./lib/Service"
 
 program
   .version(VERSION)
@@ -177,5 +176,5 @@ finish = (err) ->
     process.exit 1
   console.log "OK"
 
-# RUN THE THING
-program.parse(process.argv)
+# just export our program object
+module.exports = program
