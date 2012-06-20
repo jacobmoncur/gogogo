@@ -132,20 +132,23 @@ class Service
 
       console.log "\nPUSHING"
 
-      local "git", ["push", @repoUrl, branch, "-f"], (err) ->
+      local "git", ["push", @repoUrl, branch, "-f"], (err) =>
         if err? then return cb err
         console.log "[√] pushed"
 
         # now install and run
         installCommand = @makeInstallCommand() + "\n" + @makeRestartCommand()
-        ssh server, installCommand, (err) ->
+        ssh @server, installCommand, (err) =>
           if err? then return cb err
 
           console.log()
-          command = @log 1, cb
+          # no op this so the kill doesn't cause an error!
+          command = @logs 10, ->
 
           # for some reason it takes a while to actually kill it, like 10s
-          kill = -> command.kill()
+          kill = -> 
+            command.kill()
+            cb()
           setTimeout kill, 2000
 
   makeInstallCommand: ->
@@ -166,20 +169,20 @@ class Service
 
   restart: (cb) ->
     console.log "RESTARTING"
-    ssh server, @makeRestartCommand(), cb
+    ssh @server, @makeRestartCommand(), cb
 
   stop: (cb) ->
     console.log "STOPPING"
-    ssh server, "stop #{@id};", cb
+    ssh @server, "stop #{@id};", cb
 
   start: (cb) ->
     console.log "STARTING"
-    ssh server, "start #{@id};", cb
+    ssh @server, "start #{@id};", cb
 
   # this will never exit. You have to Command-C it, or stop the spawned process
   logs: (lines, cb) ->
     console.log "Tailing #{@logFile}... Control-C to exit"
     console.log "-------------------------------------------------------------"
-    ssh server, "tail -n #{lines} -f #{@logFile}", cb
+    ssh @server, "tail -n #{lines} -f #{@logFile}", cb
 
 module.exports = Service

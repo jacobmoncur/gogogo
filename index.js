@@ -12,13 +12,15 @@ TODO multiple servers
 
 
 (function() {
-  var CONFIG, LOGS_LINES, MainConfig, Service, VERSION, finish, fs, getConfigRepo, getService, init, list, mainConfigPath, path, program, reponame, writeConfig;
+  var CONFIG, LOGS_LINES, MainConfig, Service, VERSION, exec, finish, fs, getConfigRepo, getService, init, list, mainConfigPath, path, program, reponame, writeConfig;
 
   CONFIG = "ggg";
 
   LOGS_LINES = 40;
 
   VERSION = "0.3.1";
+
+  exec = require("child_process").exec;
 
   fs = require('fs');
 
@@ -85,7 +87,7 @@ TODO multiple servers
   });
 
   program.command("list").description("lists all the servers").action(function() {
-    return getConfig(function(err, repoName, mainConfig) {
+    return getConfigRepo(function(err, repoName, mainConfig) {
       if (err != null) {
         return finish(err);
       }
@@ -145,7 +147,7 @@ TODO multiple servers
       if (err != null) {
         return cb(err);
       }
-      return MainConfig.loadFromFile(function(err, mainConfig) {
+      return MainConfig.loadFromFile(mainConfigPath(), function(err, mainConfig) {
         if (err) {
           return cb(new Error("Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=" + err.message));
         }

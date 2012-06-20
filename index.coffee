@@ -14,6 +14,7 @@ CONFIG = "ggg"
 LOGS_LINES = 40
 VERSION = "0.3.1"
 
+{exec} = require "child_process"
 fs = require 'fs'
 path = require 'path'
 
@@ -83,7 +84,7 @@ program
   .command("list")
   .description("lists all the servers")
   .action ->
-    getConfig (err, repoName, mainConfig) ->
+    getConfigRepo (err, repoName, mainConfig) ->
       return finish err if err?
 
       list mainConfig, finish
@@ -159,7 +160,7 @@ mainConfigPath = -> path.join process.cwd(), CONFIG
 getConfigRepo = (cb) ->
   reponame process.cwd(), (err, repoName) ->
     return cb err if err?
-    MainConfig.loadFromFile (err, mainConfig) ->
+    MainConfig.loadFromFile mainConfigPath(), (err, mainConfig) ->
       if err then return cb new Error "Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=#{err.message}"
 
       cb null, repoName, mainConfig
