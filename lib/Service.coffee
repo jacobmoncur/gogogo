@@ -66,10 +66,9 @@ class Service
     """
       description '#{@id}'
       start on startup
-      chdir #{@repoDir}
       respawn
       respawn limit 5 5 
-      exec su #{@serverUser} -c '#{@mainConfig.getStart()}' >> #{@logFile} 2>&1
+      exec su #{@serverUser} -c 'cd #{@repoDir} && #{@mainConfig.getStart()}' >> #{@logFile} 2>&1
     """
 
   makeHookScript: ->
