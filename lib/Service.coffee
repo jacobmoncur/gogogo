@@ -3,26 +3,31 @@
 
 PREFIX = "ggg"
 
-ssh = (server, commands, cb) ->
-  local 'ssh', [server, commands], (err) ->
-    if err? then return cb new Error "SSH Command Failed"
-    cb()
-
-# runs the commands and dumps output as we get it
-local = (command, args, cb) ->
-  process = spawn command, args
-  process.stdout.on 'data', (data) -> console.log data.toString().replace(/\n$/, "")
-  process.stderr.on 'data', (data) -> console.log data.toString().replace(/\n$/, "")
-
-  process.on 'exit', (code) ->
-    if code then return cb(new Error("Command Failed"))
-    cb()
-
-  return process
-
 class Service
+  log: (msg) ->
+    if @withPrefix
+      console.log "#{@server}: #{msg}"
+    else 
+      console.log msg
 
-  constructor: (@name, @server, @mainConfig, @repoName) ->
+  sshCommand: (commands, cb) =>
+    @localCommand 'ssh', [@server, commands], (err) ->
+      if err? then return cb new Error "SSH Command Failed"
+      cb()
+
+  # runs the commands and dumps output as we get it
+  localCommand: (command, args, cb) ->
+    process = spawn command, args
+    process.stdout.on 'data', (data) => @log data.toString().replace(/\n$/, "")
+    process.stderr.on 'data', (data) => @log data.toString().replace(/\n$/, "")
+
+    process.on 'exit', (code) ->
+      if code then return cb(new Error("Command Failed"))
+      cb()
+
+    return process
+
+  constructor: (@name, @server, @mainConfig, @repoName, @withPrefix = false) ->
     # pre compute all the fields we might need
     @id = @repoName + "_" + @name
     @repoDir = "$HOME/#{PREFIX}/#{@id}"
@@ -37,11 +42,11 @@ class Service
     @serverUser = @server.replace(/@.*$/, "")
 
   create: (cb) ->
-    console.log " - id: #{@id}"
-    console.log " - repo: #{@repoDir}"
-    console.log " - remote: #{@repoUrl}"
-    console.log " - start: #{@mainConfig.getStart()}"
-    console.log " - install: #{@mainConfig.getInstall()}"
+    @log " - id: #{@id}"
+    @log " - repo: #{@repoDir}"
+    @log " - remote: #{@repoUrl}"
+    @log " - start: #{@mainConfig.getStart()}"
+    @log " - install: #{@mainConfig.getInstall()}"
 
     upstartScript = @makeUpstartScript()
     hookScript = @makeHookScript()
@@ -55,7 +60,7 @@ class Service
 
     createRemoteScript = @makeCreateScript upstartScript, hookScript, cronInstallScript
 
-    ssh @server, createRemoteScript, (err) ->
+    @sshCommand createRemoteScript, (err) ->
       if err? then return cb err
       cb()
 
@@ -121,28 +126,27 @@ class Service
 
   deploy: (branch, cb) ->
 
-    console.log " - name: #{@name}"
-    console.log " - server: #{@server}"
-    console.log " - branch: #{branch}"
+    @log " - name: #{@name}"
+    @log " - server: #{@server}"
+    @log " - branch: #{branch}"
 
     # create first
     @create (err) =>
       if err? then return cb err
 
-      console.log "\nPUSHING"
+      @log "\nPUSHING"
 
-      local "git", ["push", @repoUrl, branch, "-f"], (err) =>
+      @localCommand "git", ["push", @repoUrl, branch, "-f"], (err) =>
         if err? then return cb err
-        console.log "[√] pushed"
+        @log "[√] pushed"
 
         # now install and run
         installCommand = @makeInstallCommand() + "\n" + @makeRestartCommand()
-        ssh @server, installCommand, (err) =>
+        @sshCommand installCommand, (err) =>
           if err? then return cb err
 
-          console.log()
           # no op this so the kill doesn't cause an error!
-          command = @logs 10, ->
+          command = @serverLogs 10, ->
 
           # for some reason it takes a while to actually kill it, like 10s
           kill = -> 
@@ -167,21 +171,21 @@ class Service
     """
 
   restart: (cb) ->
-    console.log "RESTARTING"
-    ssh @server, @makeRestartCommand(), cb
+    @log "RESTARTING"
+    @sshCommand @makeRestartCommand(), cb
 
   stop: (cb) ->
-    console.log "STOPPING"
-    ssh @server, "stop #{@id};", cb
+    @log "STOPPING"
+    @sshCommand "stop #{@id};", cb
 
   start: (cb) ->
-    console.log "STARTING"
-    ssh @server, "start #{@id};", cb
+    @log "STARTING"
+    @sshCommand "start #{@id};", cb
 
   # this will never exit. You have to Command-C it, or stop the spawned process
-  logs: (lines, cb) ->
-    console.log "Tailing #{@logFile}... Control-C to exit"
-    console.log "-------------------------------------------------------------"
-    ssh @server, "tail -n #{lines} -f #{@logFile}", cb
+  serverLogs: (lines, cb) ->
+    @log "Tailing #{@logFile}... Control-C to exit"
+    @log "-------------------------------------------------------------"
+    @sshCommand "tail -n #{lines} -f #{@logFile}", cb
 
 module.exports = Service
