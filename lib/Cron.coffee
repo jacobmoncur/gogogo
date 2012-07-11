@@ -34,6 +34,7 @@ class Cron
     res = ''
     for cj in @cronJobs
       res += @makeScript cj
+      res += "\n"
     return res
 
 module.exports = Cron

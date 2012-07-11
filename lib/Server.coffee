@@ -4,7 +4,7 @@ class Server
   constructor: (@name, @host, config, mainConfig) ->
     @start = config.start || mainConfig.getStart()
     @install = config.install || mainConfig.getInstall()
-    cron = if config.cron then mainConfig.normalizeCron cron else null
+    cron = if config.cron then mainConfig.normalizeCron config.cron else null
     @cron = cron || mainConfig.getCron()
 
   getStart: ->
@@ -15,9 +15,9 @@ class Server
 
   getCron: -> @cron
 
-  getUser: @host.replace(/@.*$/, "")
+  getUser: -> @host.replace(/@.*$/, "")
 
-  getHost: @host
+  getHost: -> @host
 
 
 module.exports = Server

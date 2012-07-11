@@ -8,10 +8,10 @@ PREFIX = "ggg"
 class Service
   # we let the host group handle the logging
   log: (msg) ->
-    @parent.log @serverAddress, msg
+    @parent.log @host, msg
 
   sshCommand: (commands, cb) =>
-    @localCommand 'ssh', [@server, commands], (err) ->
+    @localCommand 'ssh', [@host, commands], (err) ->
       if err? then return cb new Error "SSH Command Failed"
       cb()
 
@@ -50,11 +50,13 @@ class Service
     hookScript = @makeHookScript()
     # CRON SUPPORT
     cronConfig = @config.getCron()
+    cronScript = ''
 
     if cronConfig
-      cron = new Cron cronConfig, @id, @serverUser
+      cron = new Cron cronConfig, @id, @repoDir, @serverUser
+      cronScript = cron.buildCron()
 
-    createRemoteScript = @makeCreateScript upstartScript, hookScript, cron.buildCron()
+    createRemoteScript = @makeCreateScript upstartScript, hookScript, cronScript
 
     @sshCommand createRemoteScript, (err) ->
       if err? then return cb err
@@ -112,7 +114,7 @@ class Service
   deploy: (branch, cb) ->
 
     @log " - name: #{@name}"
-    @log " - server: #{@server}"
+    @log " - server: #{@host}"
     @log " - branch: #{branch}"
 
     # create first

@@ -141,7 +141,7 @@ init = (cb) ->
 
 list = (mainConfig, cb) ->
   console.log "GOGOGO servers (see ggg.js)"
-  console.log " - " + mainConfig.getServerNames().join("\n - ")
+  console.log " - " + mainConfig.getLayerNames().join("\n - ")
 
 ## HELPERS #################################################
 # gets the repo url for the current directory
@@ -180,7 +180,7 @@ getLayer = (name, cb) ->
     layerConfig = mainConfig.getLayerByName name
     if !layerConfig then return cb new Error("Invalid Layer Name: #{name}")
 
-    layer = new layer name, servers, repoName, mainConfig
+    layer = new Layer name, layerConfig, repoName, mainConfig
 
     cb null, layer 
 

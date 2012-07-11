@@ -5,23 +5,23 @@ path = require "path"
 readConfig = (f, cb) ->
   try
     m = require f
-    cb null, m
   catch e
     console.log "BAD", e
     throw e
     cb e
+  cb null, m
 
 
 class MainConfig
 
-  constructor: ({@start, @install, @cron, layers}) ->
+  constructor: ({@start, @install, @cron, servers}) ->
     # normalize to an array for multi server deploys
-    @servers = []
-    for name, layer of layers
+    @layers = []
+    for name, layer of servers 
       @layers[name] = @normalizeLayer layer
 
   getLayerByName: (name) ->
-    @layer[name] || throw new Error "Cannot find server named #{name}. Check your config file"
+    @layers[name] || throw new Error "Cannot find server named #{name}. Check your config file"
 
   getStart: ->
     @start
@@ -34,7 +34,7 @@ class MainConfig
 
   #returns false if not defined
   getCron: ->
-    if not @cron? false else @normalizeCron @cron
+    if @cron? then @normalizeCron @cron else false
 
   normalizeCron: (cron) ->
     # support the old syntax
@@ -53,6 +53,7 @@ class MainConfig
       cron = [cron]
 
     return cron
+
 
   normalizeLayer: (config) ->
     if typeof config == "string"
