@@ -7,12 +7,11 @@ Ubuntu only! (upstart)
 TODO remember last command again
 TODO multiple services
 TODO multiple cron
-TODO multiple servers
 */
 
 
 (function() {
-  var CONFIG, HostGroup, LOGS_LINES, MainConfig, Service, VERSION, exec, finish, fs, getConfigRepo, getService, init, list, mainConfigPath, path, program, reponame, writeConfig;
+  var CONFIG, LOGS_LINES, Layer, MainConfig, VERSION, exec, finish, fs, getConfigRepo, getLayer, init, list, mainConfigPath, path, program, reponame, writeConfig;
 
   CONFIG = "ggg";
 
@@ -30,9 +29,7 @@ TODO multiple servers
 
   MainConfig = require("./lib/MainConfig");
 
-  HostGroup = require("./lib/HostGroup");
-
-  Service = require("./lib/Service");
+  Layer = require("./lib/Layer");
 
   program.version(VERSION);
 
@@ -41,50 +38,50 @@ TODO multiple servers
   });
 
   program.command("deploy <name> [branch]").description("deploys a branch (defaults to origin/master) to named server").action(function(name, branch) {
-    return getService(name, function(err, service) {
+    return getLayer(name, function(err, layer) {
       if (err != null) {
         return finish(err);
       }
       branch = branch || "origin/master";
-      return service.deploy(branch, finish);
+      return layer.deploy(branch, finish);
     });
   });
 
   program.command("restart <name>").description("restarts named server").action(function(name) {
-    return getService(name, function(err, service) {
+    return getLayer(name, function(err, layer) {
       if (err != null) {
         return finish(err);
       }
-      return service.restart(finish);
+      return layer.restart(finish);
     });
   });
 
   program.command("start <name>").description("starts named server").action(function(name) {
-    return getService(name, function(err, service) {
+    return getLayer(name, function(err, layer) {
       if (err != null) {
         return finish(err);
       }
-      return service.start(finish);
+      return layer.start(finish);
     });
   });
 
   program.command("stop <name>").description("stops named server").action(function(name) {
-    return getService(name, function(err, service) {
+    return getLayer(name, function(err, layer) {
       if (err != null) {
         return finish(err);
       }
-      return service.stop(finish);
+      return layer.stop(finish);
     });
   });
 
   program.command("logs <name>").description("Logs " + LOGS_LINES + " lines of named servers log files").option("-l, --lines <num>", "the number of lines to log").action(function(name) {
-    return getService(name, function(err, service) {
+    return getLayer(name, function(err, layer) {
       var lines;
       if (err != null) {
         return finish(err);
       }
       lines = program.lines || LOGS_LINES;
-      return service.serverLogs(lines, finish);
+      return layer.serverLogs(lines, finish);
     });
   });
 
@@ -108,7 +105,7 @@ TODO multiple servers
 
   init = function(cb) {
     var initConfigContent;
-    initConfigContent = "// example ggg.js. Delete what you don't need\nmodule.exports = {\n\n  // services\n  start: \"node app.js\",\n\n  // install\n  install: \"npm install\",\n\n  // cron jobs (from your app folder)\n  cron: \"0 3 * * * node sometask.js\",\n\n  // servers to deploy to\n  servers: {\n    dev: \"deploy@dev.mycompany.com\",\n    staging: [\"deploy@staging.mycompany.com\", \"deploy@staging2.mycompany.com\"]\n  }\n}";
+    initConfigContent = "// example ggg.js. Delete what you don't need\nmodule.exports = {\n\n  // services\n  start: \"node app.js\",\n\n  // install\n  install: \"npm install\",\n\n  // cron jobs (from your app folder)\n  cron: {name: \"someTask\", time: \"0 3 * * *\", command: \"node sometask.js\"},\n\n  // servers to deploy to\n  servers: {\n    dev: \"deploy@dev.mycompany.com\",\n    staging: [\"deploy@staging.mycompany.com\", \"deploy@staging2.mycompany.com\"]\n    prod: {\n      hosts: [\"deploy@mycompany.com\", \"deploy@backup.mycompany.com\"],\n      cron: [\n        {name: \"someTask\", time: \"0 3 * * *\", command: \"node sometask.js\"},\n        {name: \"anotherTask\", time: \"0 3 * * *\", command: \"node secondTask.js\"}\n      ],\n      start: \"prodstart app.js\"\n    }\n  }\n}";
     console.log("GOGOGO INITIALIZING!");
     console.log("*** Written to ggg.js ***");
     console.log(initConfigContent);
@@ -158,23 +155,18 @@ TODO multiple servers
     });
   };
 
-  getService = function(name, cb) {
+  getLayer = function(name, cb) {
     return getConfigRepo(function(err, repoName, mainConfig) {
-      var servers, service;
+      var layer, layerConfig;
       if (err != null) {
         return cb(err);
       }
-      servers = mainConfig.getServerByName(name);
-      if (!servers) {
-        return cb(new Error("Invalid Server Name: " + name));
+      layerConfig = mainConfig.getLayerByName(name);
+      if (!layerConfig) {
+        return cb(new Error("Invalid Layer Name: " + name));
       }
-      service = null;
-      if (servers.length > 1) {
-        service = new HostGroup(name, servers, mainConfig, repoName);
-      } else {
-        service = new Service(name, servers[0], mainConfig, repoName);
-      }
-      return cb(null, service);
+      layer = new layer(name, servers, repoName, mainConfig);
+      return cb(null, layer);
     });
   };
 
