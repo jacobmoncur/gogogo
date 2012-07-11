@@ -18,6 +18,7 @@ Installation
 Change Log
 ----------
 
+* 0.3.3 - multi cron support, plus per-layer config
 * 0.3.0 - custom config file, cron support
 * 0.2.6 - git push force
 * 0.2.5 - Server Environment variables are preserved! Deploy monitors the log for a couple seconds. 
@@ -41,15 +42,30 @@ In your local repo
 
 module.exports = {
 
-    # how to start your app
-    start: "PORT=5333 node app.js",
+  // services
+  start: "node app.js",
 
-    # how to install/configure your app
-    install: "npm install",
+  // install
+  install: "npm install",
 
-    servers: {
-        dev: "deploy@dev.mycompany.com"
+  // cron jobs (from your app folder)
+  cron: {
+    someTask: { time: "0 3 * * *", command: "node sometask.js"},
+  }
+
+  // servers to deploy to
+  servers: {
+    dev: "deploy@dev.mycompany.com",
+    staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"]
+    prod: {
+      hosts: ["deploy@mycompany.com", "deploy@backup.mycompany.com"],
+      cron: {
+        someTask: {time: "0 3 * * *", command: "node sometask.js"},
+        anotherTask: {time: "0 3 * * *", command: "node secondTask.js"}
+      },
+      start: "prodstart app.js"
     }
+  }
 }
 
 3. gogogo deploy dev master
@@ -94,7 +110,9 @@ Help
 Gogogo currently supports a single cron action.
 
     module.exports = {
-        cron: "0 3 * * * node something.js"
+        cron: {
+         cronName: {time: "0 3 * * *" command: " node something.js"}
+        }
         ...
     }
 
