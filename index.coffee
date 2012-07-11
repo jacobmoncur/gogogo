@@ -5,7 +5,6 @@ Ubuntu only! (upstart)
 TODO remember last command again
 TODO multiple services
 TODO multiple cron
-TODO multiple servers
 
 ###
 
@@ -21,8 +20,7 @@ path = require 'path'
 program = require 'commander'
 
 MainConfig = require "./lib/MainConfig"
-HostGroup = require "./lib/HostGroup"
-Service = require "./lib/Service"
+Layer = require "./lib/Layer"
 
 program
   .version(VERSION)
@@ -38,48 +36,48 @@ program
   .command("deploy <name> [branch]")
   .description("deploys a branch (defaults to origin/master) to named server")
   .action (name, branch) ->
-    getService name, (err, service) ->
+    getLayer name, (err, layer) ->
       return finish err if err?
 
       branch = branch || "origin/master"
 
-      service.deploy branch, finish
+      layer.deploy branch, finish
 
 
 program
   .command("restart <name>")
   .description("restarts named server")
   .action (name) ->
-    getService name, (err, service) ->
+    getLayer name, (err, layer) ->
       return finish err if err?
-      service.restart finish
+      layer.restart finish
 
 
 program
   .command("start <name>")
   .description("starts named server")
   .action (name) ->
-    getService name, (err, service) ->
+    getLayer name, (err, layer) ->
       return finish err if err?
-      service.start finish
+      layer.start finish
 
 program
   .command("stop <name>")
   .description("stops named server")
   .action (name) ->
-    getService name, (err, service) ->
+    getLayer name, (err, layer) ->
       return finish err if err?
-      service.stop finish
+      layer.stop finish
 
 program
   .command("logs <name>")
   .description("Logs #{LOGS_LINES} lines of named servers log files")
   .option("-l, --lines <num>", "the number of lines to log")
   .action (name) ->
-    getService name, (err, service) ->
+    getLayer name, (err, layer) ->
       return finish err if err?
       lines = program.lines || LOGS_LINES
-      service.serverLogs lines, finish
+      layer.serverLogs lines, finish
 
 program
   .command("list")
@@ -117,12 +115,20 @@ init = (cb) ->
       install: "npm install",
 
       // cron jobs (from your app folder)
-      cron: "0 3 * * * node sometask.js",
+      cron: {name: "someTask", time: "0 3 * * *", command: "node sometask.js"},
 
       // servers to deploy to
       servers: {
         dev: "deploy@dev.mycompany.com",
         staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"]
+        prod: {
+          hosts: ["deploy@mycompany.com", "deploy@backup.mycompany.com"],
+          cron: [
+            {name: "someTask", time: "0 3 * * *", command: "node sometask.js"},
+            {name: "anotherTask", time: "0 3 * * *", command: "node secondTask.js"}
+          ],
+          start: "prodstart app.js"
+        }
       }
     }
   """
@@ -166,22 +172,17 @@ getConfigRepo = (cb) ->
 
       cb null, repoName, mainConfig
 
-#returns the service object
-getService = (name, cb) ->
+#returns the layer object
+getLayer = (name, cb) ->
   getConfigRepo (err, repoName, mainConfig) ->
     return cb err if err?
 
-    servers = mainConfig.getServerByName name
-    if !servers then return cb new Error("Invalid Server Name: #{name}")
+    layerConfig = mainConfig.getLayerByName name
+    if !layerConfig then return cb new Error("Invalid Layer Name: #{name}")
 
-    service = null
-    
-    if servers.length > 1
-      service = new HostGroup name, servers, mainConfig, repoName
-    else
-      service = new Service name, servers[0], mainConfig, repoName
+    layer = new layer name, servers, repoName, mainConfig
 
-    cb null, service
+    cb null, layer 
 
 # our handler on the finish
 finish = (err) ->

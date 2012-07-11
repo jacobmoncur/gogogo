@@ -1,17 +1,25 @@
 
 Service = require "./Service"
+Server = require "./Server"
 async = require "async"
 {curry} = require "fjs"
 
-# Represnts a group of hosts in a service
+# Represnts a layer for deployment
 
-class HostGroup
+class Layer 
 
-  constructor: (@name, @servers, @mainConfig, @repoName) ->
-    console.log "WORKING WITH #{@servers.length} SERVERS: #{@servers.join(',')}"
+  constructor: (@name, layer, @repoName, mainConfig) ->
+
+    layer = @normalizeConfig layer
+
+    if layer.hosts.length > 1
+      @groupDeploy = true
+
+    console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
     @services = []
-    for server in servers
-      @services.push new Service(@name, server, @mainConfig, @repoName, true)
+    for server in layers.hosts
+      serverConfig = new Server @name, server, layer, mainConfig 
+      @services.push new Service(@name, serverConfig, @repoName, this)
 
   deployOne: curry (branch, service, cb) ->
     service.deploy branch, cb
@@ -44,4 +52,11 @@ class HostGroup
   actionOne: curry (action, service, cb) ->
     service[action] cb
 
-module.exports = HostGroup
+  log: (parentAddress, msg) ->
+    if @groupDeploy 
+      console.log "#{parentAddress}: #{msg}"
+    else
+      console.log msg
+
+
+module.exports = Layer 
