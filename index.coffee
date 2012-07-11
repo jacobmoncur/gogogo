@@ -115,7 +115,9 @@ init = (cb) ->
       install: "npm install",
 
       // cron jobs (from your app folder)
-      cron: {name: "someTask", time: "0 3 * * *", command: "node sometask.js"},
+      cron: {
+        someTask: { time: "0 3 * * *", command: "node sometask.js"},
+      }
 
       // servers to deploy to
       servers: {
@@ -123,10 +125,10 @@ init = (cb) ->
         staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"]
         prod: {
           hosts: ["deploy@mycompany.com", "deploy@backup.mycompany.com"],
-          cron: [
-            {name: "someTask", time: "0 3 * * *", command: "node sometask.js"},
-            {name: "anotherTask", time: "0 3 * * *", command: "node secondTask.js"}
-          ],
+          cron: {
+            someTask: {time: "0 3 * * *", command: "node sometask.js"},
+            anotherTask: {time: "0 3 * * *", command: "node secondTask.js"}
+          },
           start: "prodstart app.js"
         }
       }

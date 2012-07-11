@@ -4,7 +4,8 @@ class Cron
   constructor: (cronConfig, @id, @repoDir, @serverUser, @cronDir = "/etc/cron.d") ->
     @cronJobs = []
 
-    for cf in cronConfig
+    for name, cf of cronConfig
+      cf.name = name
       @cronJobs.push @validate cf
 
   makeFileName: (name) -> "#{@cronDir}/#{@id}_cron_#{name}"

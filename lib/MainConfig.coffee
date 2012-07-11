@@ -45,12 +45,10 @@ class MainConfig
       warning = 
         """
         you should switch your cron to instead be the following in ggg.js:
-          cron: {name: "cronName", time: #{matches[1]}, command: #{matches[2]} }
+          cron: { cronName: {time: #{matches[1]}, command: #{matches[2]} } }
         """
       console.log warning
-      cron = [{name: "default", time: matches[1], command: matches[2]}]
-    else if not Array.isArray cron
-      cron = [cron]
+      cron = {default: {time: matches[1], command: matches[2]}}
 
     return cron
 
