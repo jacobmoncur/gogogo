@@ -5,39 +5,67 @@ path = require "path"
 readConfig = (f, cb) ->
   try
     m = require f
-    cb null, m
   catch e
     console.log "BAD", e
     throw e
     cb e
+  cb null, m
 
 
 class MainConfig
 
   constructor: ({@start, @install, @cron, servers}) ->
     # normalize to an array for multi server deploys
-    @servers = []
-    for name, server of servers
-      @servers[name] = if Array.isArray(server) then server else [server]
+    @layers = []
+    for name, layer of servers 
+      @layers[name] = @normalizeLayer layer
 
-  getServerByName: (name) ->
-    @servers[name] || throw new Error "Cannot find server named #{name}. Check your config file"
+  getLayerByName: (name) ->
+    @layers[name] || throw new Error "Cannot find server named #{name}. Check your config file"
 
   getStart: ->
-    @start || throw new Error "You must specify 'start:' in your config file"
+    @start
 
   getInstall: ->
-    @install || throw new Error "You must specify 'install:' in your config file"
+    @install
 
-  getServerNames: ->
-    Object.keys @servers
+  getLayerNames: ->
+    Object.keys @layers
 
   #returns false if not defined
-  getCronConfig: ->
-    return false if not @cron?
-    matches = @cron.match(/([0-9\s\*]+)\s+(.*)/)
-    if not matches? then throw new Error "Invalid Cron: #{@cron}"
-    return {time: matches[1], command: matches[2]}
+  getCron: ->
+    if @cron? then @normalizeCron @cron else false
+
+  normalizeCron: (cron) ->
+    # support the old syntax
+    if typeof cron == "string"
+      console.log "using deprecated cron syntax"
+      matches = cron.match(/([0-9\s\*]+)\s+(.*)/)
+      if not matches? then throw new Error "Invalid Cron: #{@cron}"
+      warning = 
+        """
+        you should switch your cron to instead be the following in ggg.js:
+          cron: { cronName: {time: #{matches[1]}, command: #{matches[2]} } }
+        """
+      console.log warning
+      cron = {default: {time: matches[1], command: matches[2]}}
+
+    return cron
+
+
+  normalizeLayer: (config) ->
+    if typeof config == "string"
+      config = {
+        hosts: [config]
+      }
+    else if Array.isArray config
+      config = {
+        hosts: config
+      }
+    else if typeof config.hosts == "string"
+      config.hosts = [config.hosts]
+
+    return config
 
 
 MainConfig.loadFromFile = (file, cb) ->

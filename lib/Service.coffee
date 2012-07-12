@@ -1,17 +1,17 @@
 
 {spawn} = require 'child_process'
 
+Cron = require "./Cron"
+
 PREFIX = "ggg"
 
 class Service
+  # we let the host group handle the logging
   log: (msg) ->
-    if @withPrefix
-      console.log "#{@server}: #{msg}"
-    else 
-      console.log msg
+    @parent.log @host, msg
 
   sshCommand: (commands, cb) =>
-    @localCommand 'ssh', [@server, commands], (err) ->
+    @localCommand 'ssh', [@host, commands], (err) ->
       if err? then return cb new Error "SSH Command Failed"
       cb()
 
@@ -27,38 +27,36 @@ class Service
 
     return process
 
-  constructor: (@name, @server, @mainConfig, @repoName, @withPrefix = false) ->
+  constructor: (@name, @repoName, @config, @parent) ->
     # pre compute all the fields we might need
     @id = @repoName + "_" + @name
     @repoDir = "$HOME/#{PREFIX}/#{@id}"
-    @repoUrl = "ssh://#{@server}/~/#{PREFIX}/#{@id}"
+    @host = @config.getHost()
+    @serverUser = @config.getUser()
+    @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
     @hookFile = "#{@repoDir}/.git/hooks/post-receive"
     @logFile = "#{@repoDir}/log.txt"
     @upstartFile = "/etc/init/#{@id}.conf"
 
-    @cronFile = "/etc/cron.d/#{@id}"
-    @cronLogFile = "cron.txt"
-
-    @serverUser = @server.replace(/@.*$/, "")
 
   create: (cb) ->
     @log " - id: #{@id}"
     @log " - repo: #{@repoDir}"
     @log " - remote: #{@repoUrl}"
-    @log " - start: #{@mainConfig.getStart()}"
-    @log " - install: #{@mainConfig.getInstall()}"
+    @log " - start: #{@config.getStart()}"
+    @log " - install: #{@config.getInstall()}"
 
     upstartScript = @makeUpstartScript()
     hookScript = @makeHookScript()
     # CRON SUPPORT
-    cronInstallScript = ""
-    cron = @mainConfig.getCronConfig()
+    cronConfig = @config.getCron()
+    cronScript = ''
 
-    if cron
-      cronScript = @makeCronScript cron
-      cronInstallScript = @makeCronInstallScript cronScript
+    if cronConfig
+      cron = new Cron cronConfig, @id, @repoDir, @serverUser
+      cronScript = cron.buildCron()
 
-    createRemoteScript = @makeCreateScript upstartScript, hookScript, cronInstallScript
+    createRemoteScript = @makeCreateScript upstartScript, hookScript, cronScript
 
     @sshCommand createRemoteScript, (err) ->
       if err? then return cb err
@@ -73,7 +71,7 @@ class Service
       start on startup
       respawn
       respawn limit 5 5 
-      exec su #{@serverUser} -c 'cd #{@repoDir} && #{@mainConfig.getStart()}' >> #{@logFile} 2>&1
+      exec su #{@serverUser} -c 'cd #{@repoDir} && #{@config.getStart()}' >> #{@logFile} 2>&1
     """
 
   makeHookScript: ->
@@ -88,17 +86,6 @@ class Service
       GIT_WORK_TREE=#{@repoDir} git reset --hard \\$newrev || exit 1;
     """
 
-  makeCronScript: (cron) ->
-    """
-      PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      #{cron.time} #{@serverUser} cd #{@repoDir} && #{cron.command} >> #{@cronLogFile} 2>&1
-    """
-
-  makeCronInstallScript: (cronScript) ->
-    """
-      echo "#{cronScript}" > #{@cronFile}
-      chmod 0644 #{@cronFile}
-    """
 
   makeCreateScript: (upstart, hook, cronInstallScript) ->
     # command
@@ -127,7 +114,7 @@ class Service
   deploy: (branch, cb) ->
 
     @log " - name: #{@name}"
-    @log " - server: #{@server}"
+    @log " - server: #{@host}"
     @log " - branch: #{branch}"
 
     # create first
@@ -158,7 +145,7 @@ class Service
     """
       echo '\nINSTALLING'
       cd #{@repoDir}
-      #{@mainConfig.getInstall()} || exit 1;
+      #{@config.getInstall()} || exit 1;
       echo '[√] installed'
     """
 
