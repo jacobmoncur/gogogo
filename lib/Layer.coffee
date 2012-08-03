@@ -23,12 +23,14 @@ class Layer extends EventEmitter
       for server in layer.hosts
         serverConfig = new Server @name, server, layer, mainConfig 
         @services.push new Service(@name, @repoName, serverConfig, this)
-        @emit "ready"
+
+      @emit "ready"
 
   # we resolve and run the plugins here, as they can change any parameters here
   runPlugins: (layer, mainConfig, cb) ->
     plugins = layer.plugins || mainConfig.getPlugins()
-    return cb() if not plugins
+    # this needs to go on the next tick so we have time to attached the handler
+    return process.nextTick cb if not plugins
     toRun = []
     for name, plugin of plugins
       plugin.name = name
