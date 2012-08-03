@@ -41,6 +41,7 @@ In your local repo
 
 2. edit ggg.js:
 
+``` JavaScript
 module.exports = {
 
   // services
@@ -68,6 +69,7 @@ module.exports = {
     }
   }
 }
+```
 
 3. gogogo deploy dev master
 
@@ -86,7 +88,7 @@ As of 0.4.0, gogogo supports plugins to help your deploys be more dynamic.
 gogogo plugins override a single deploy parameter (such as hosts) and are a simple
 file that exports a single function with the following signature:
 
-```
+``` JavaScript
 module.exports = function(opts, cb) {
 ...
   cb(err, overrides)
@@ -98,7 +100,7 @@ where opts is a hash of user definied options
 Currently, there is one bundled plugin, chefHosts, which integrates with opscode's knife to 
 retrieve a list of servers to deploy too. Example of using a plugin is show below
 
-```
+``` JavaScript
 ...
 plugins: {
   "chefHosts" : {
@@ -151,12 +153,14 @@ Help
 
 Gogogo currently supports a single cron action.
 
+``` JavaScript
     module.exports = {
         cron: {
          cronName: {time: "0 3 * * *" command: " node something.js"}
         }
         ...
     }
+```
 
 It will create a script in /etc/cron.d/, set the permissions correctly, and redirect log output to `cron.txt`
  
@@ -175,6 +179,7 @@ If they refer to something about the server you are on, put them in /etc/environ
 
 To deploy to multiple servers, just add multiple servers to the config file
 
+``` JavaScript
     // ggg.js
     module.exports = {
         servers: {
@@ -182,6 +187,7 @@ To deploy to multiple servers, just add multiple servers to the config file
             staging: "deploy@staging.mycompany.com"
         }
     }
+```
 
 Then deploy to them separately
 
@@ -192,6 +198,7 @@ Then deploy to them separately
 
 You can deploy any branch over your old remote by pushing to it. To have multiple versions of an app running at the same time, call `gogogo create` with different names and the same server.
 
+``` JavaScript
     // ggg.js
     module.exports = {
         servers: {
@@ -199,6 +206,7 @@ You can deploy any branch over your old remote by pushing to it. To have multipl
             featurex: "deploy@dev.mycompany.com"
         }
     }
+```
 
 Then deploy to them separately
 
