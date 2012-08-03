@@ -2,11 +2,17 @@
   "name": "gogogo",
   "description":"CLI to automate deploys based on package.json",
   "author": "Sean Hess",
-  "version": "0.3.5",
+  "contributors": [
+    "Addison Higham <addisonj@gmail.com> (github.com/addisonj)"
+  ],
+  "version": "0.4.0",
   "repository": { "url": "git@github.com:idottv/gogogo.git" },
-  "bin": { "gogogo" : "bin/gogogo.js" },
+  "bin": { 
+    "gogogo" : "bin/gogogo.js",
+    "ggg" : "bin/gogogo.js"
+  },
   "main": "index.js",
-  "scripts": { "prepublish" : "coffee -c lib/*.coffee index.coffee" },
+  "scripts": { "prepublish" : "coffee -c lib/*.coffee plugins/*.coffee index.coffee" },
   "devDependencies": {
     "coffee-script":"1.3.1"
   }, 

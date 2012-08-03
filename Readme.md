@@ -18,6 +18,7 @@ Installation
 Change Log
 ----------
 
+* 0.4.0 - Added support for tracking support history, plugins, and a chef plugin
 * 0.3.3 - multi cron support, plus per-layer config
 * 0.3.0 - custom config file, cron support
 * 0.2.6 - git push force
@@ -77,6 +78,43 @@ module.exports = {
 
     # deploy again
     gogogo deploy test master
+
+### Plugins
+
+As of 0.4.0, gogogo supports plugins to help your deploys be more dynamic.
+
+gogogo plugins override a single deploy parameter (such as hosts) and are a simple
+file that exports a single function with the following signature:
+
+```
+module.exports = function(opts, cb) {
+...
+  cb(err, overrides)
+}
+```
+where opts is a hash of user definied options
+
+
+Currently, there is one bundled plugin, chefHosts, which integrates with opscode's knife to 
+retrieve a list of servers to deploy too. Example of using a plugin is show below
+
+```
+...
+plugins: {
+  "chefHosts" : {
+    overrides: "hosts", // required field! defines the property to override
+    opts: {
+      role: "myapp",
+      env: "production"
+    }
+  },
+  "./plugins/myPlugin" { // user plugins are supported, relative to cwd
+    overrides: "install"
+  }
+},
+...
+```
+
     
 Limitations
 -----------
@@ -104,6 +142,10 @@ Help
     gogogo stop <name>
     gogogo logs <name> — tail remote log
     gogogo list — show available names
+    gogogo history <name> - shows a history of deployed commits
+
+
+    gogogo has an alias of ggg for saving you those precious keystrokes
 
 ### Cron Support
 

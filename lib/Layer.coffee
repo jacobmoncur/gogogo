@@ -1,4 +1,6 @@
 
+path = require "path"
+{EventEmitter} = require "events"
 Service = require "./Service"
 Server = require "./Server"
 async = require "async"
@@ -6,17 +8,51 @@ async = require "async"
 
 # Represnts a layer for deployment
 
-class Layer 
+class Layer extends EventEmitter
 
   constructor: (@name, layer, @repoName, mainConfig) ->
-    if layer.hosts.length > 1
-      @groupDeploy = true
+    @runPlugins layer, mainConfig, (err) =>
+      return @emit "error", err if err?
 
-    console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
-    @services = []
-    for server in layer.hosts
-      serverConfig = new Server @name, server, layer, mainConfig 
-      @services.push new Service(@name, @repoName, serverConfig, this)
+      if layer.hosts.length > 1
+        @groupDeploy = true
+
+      console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
+
+      @services = []
+      for server in layer.hosts
+        serverConfig = new Server @name, server, layer, mainConfig 
+        @services.push new Service(@name, @repoName, serverConfig, this)
+        @emit "ready"
+
+  # we resolve and run the plugins here, as they can change any parameters here
+  runPlugins: (layer, mainConfig, cb) ->
+    plugins = layer.plugins || mainConfig.getPlugins()
+    return cb() if not plugins
+    toRun = []
+    for name, plugin of plugins
+      plugin.name = name
+      toRun.push plugin
+
+    withLayer = @runPlugin layer
+    async.forEach toRun, withLayer, cb
+
+  runPlugin: curry (layer, plugin, cb) ->
+    if not plugin.overrides
+      return cb new Error("invalid plugin definition, you need an overrides directive")
+
+    pluginPath = ''
+    if plugin.name.match /^\.\//
+      pluginPath = path.join process.cwd(), plugin.name
+    else
+      pluginPath = path.join __dirname, '../plugins/', plugin.name
+
+    pluginModule = require pluginPath
+    console.log "running plugin at #{pluginPath}"
+    pluginModule plugin.opts, (err, res) ->
+      return cb err if err?
+      layer[plugin.overrides] = res
+      cb()
 
   deployOne: curry (branch, service, cb) ->
     service.deploy branch, cb
@@ -28,9 +64,16 @@ class Layer
   logOne: curry (lines, service, cb) ->
     service.serverLogs lines, cb
 
+  historyOne: curry (revisions, service, cb) ->
+    service.getHistory revisions, cb
+
   serverLogs: (lines, cb) ->
     withLines = @logOne lines
     async.forEach @services, withLines, cb
+
+  commitHistory: (revisions, cb) ->
+    withRevisions = @historyOne revisions
+    async.forEach @services, withRevisions, cb
 
   # do these ones generically, because no params
   restart: (cb) ->

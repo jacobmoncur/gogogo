@@ -31,6 +31,7 @@ class Service
     # pre compute all the fields we might need
     @id = @repoName + "_" + @name
     @repoDir = "$HOME/#{PREFIX}/#{@id}"
+    @historyFile = "$HOME/#{PREFIX}/#{@id}-history.txt"
     @host = @config.getHost()
     @serverUser = @config.getUser()
     @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
@@ -76,16 +77,15 @@ class Service
 
   makeHookScript: ->
     # http://toroid.org/ams/git-website-howto
-    # we don't use the hook for anything, except making sure it checks out.
-    # you still need the hook. It won't check out otherwise. Not sure why
+    # this hook ensures that we check out the right revision and also keep track of what we have deploy
     """
       read oldrev newrev refname
       echo 'GOGOGO checking out:'
       echo \\$newrev
+      echo \\`date\\` - \\$newrev >> #{@historyFile}
       cd #{@repoDir}/.git
       GIT_WORK_TREE=#{@repoDir} git reset --hard \\$newrev || exit 1;
     """
-
 
   makeCreateScript: (upstart, hook, cronInstallScript) ->
     # command
@@ -174,5 +174,10 @@ class Service
     @log "Tailing #{@logFile}... Control-C to exit"
     @log "-------------------------------------------------------------"
     @sshCommand "tail -n #{lines} -f #{@logFile}", cb
+
+  getHistory: (revisions, cb) ->
+    @log "Retrieving last #{revisions} deploys, most recent first!"
+    @log "-------------------------------------------------------------"
+    @sshCommand "tail -n #{revisions} #{@historyFile} | tac", cb
 
 module.exports = Service
