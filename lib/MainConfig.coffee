@@ -14,7 +14,7 @@ readConfig = (f, cb) ->
 
 class MainConfig
 
-  constructor: ({@start, @install, @cron, servers}) ->
+  constructor: ({@start, @install, @plugins, @cron, servers}) ->
     # normalize to an array for multi server deploys
     @layers = []
     for name, layer of servers 
@@ -28,6 +28,9 @@ class MainConfig
 
   getInstall: ->
     @install
+
+  getPlugins: ->
+    @plugins
 
   getLayerNames: ->
     Object.keys @layers
@@ -45,7 +48,7 @@ class MainConfig
       warning = 
         """
         you should switch your cron to instead be the following in ggg.js:
-          cron: { cronName: {time: #{matches[1]}, command: #{matches[2]} } }
+          cron: { cronName: {time: '#{matches[1]}', command: '#{matches[2]}' } }
         """
       console.log warning
       cron = {default: {time: matches[1], command: matches[2]}}

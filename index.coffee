@@ -11,7 +11,8 @@ TODO multiple cron
 CONFIG = "ggg"
 
 LOGS_LINES = 40
-VERSION = "0.3.1"
+COMMIT_HISTORY = 5
+VERSION = "0.4.0"
 
 {exec} = require "child_process"
 fs = require 'fs'
@@ -78,6 +79,16 @@ program
       return finish err if err?
       lines = program.lines || LOGS_LINES
       layer.serverLogs lines, finish
+
+program
+  .command("history <name>")
+  .description("Shows a history of #{COMMIT_HISTORY} last commits deployed")
+  .option("-r, --revisions <num>", "the number of commits to show")
+  .action (name) ->
+    getLayer name, (err, layer) ->
+      return finish err if err?
+      revisions = program.args.revisions || COMMIT_HISTORY
+      layer.commitHistory revisions, finish
 
 program
   .command("list")
@@ -183,13 +194,15 @@ getLayer = (name, cb) ->
     if !layerConfig then return cb new Error("Invalid Layer Name: #{name}")
 
     layer = new Layer name, layerConfig, repoName, mainConfig
-
-    cb null, layer 
+    layer.on "error", (err) -> return cb err
+    layer.on "ready", ->
+      cb null, layer 
 
 # our handler on the finish
 finish = (err) ->
   if err?
     console.log "!!! " + err.message
+    console.log "stack follows:\n\n #{err.stack}"
     process.exit 1
   console.log "OK"
 
