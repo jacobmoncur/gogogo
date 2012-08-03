@@ -35,7 +35,7 @@ class Service
     @serverUser = @config.getUser()
     @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
     @hookFile = "#{@repoDir}/.git/hooks/post-receive"
-    @logFile = "#{@repoDir}/log.txt"
+    @logFile = "#{@repoDir}/ggg.log"
     @upstartFile = "/etc/init/#{@id}.conf"
 
 
