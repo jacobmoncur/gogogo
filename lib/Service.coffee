@@ -10,6 +10,12 @@ class Service
   log: (msg) ->
     @parent.log @host, msg
 
+  runCommand: (commands, cb) =>
+    if @isLocal
+      @localCommand "bash", ["-c", commands], cb
+    else
+      @sshCommand commands, cb
+
   sshCommand: (commands, cb) =>
     @localCommand 'ssh', [@host, commands], (err) ->
       if err? then return cb new Error "SSH Command Failed"
@@ -27,17 +33,23 @@ class Service
 
     return process
 
-  constructor: (@name, @repoName, @config, @parent) ->
+  constructor: (@name, @repoName, @config, @parent, @isLocal = false) ->
     # pre compute all the fields we might need
     @id = @repoName + "_" + @name
     @repoDir = "$HOME/#{PREFIX}/#{@id}"
     @historyFile = "$HOME/#{PREFIX}/#{@id}-history.txt"
-    @host = @config.getHost()
     @serverUser = @config.getUser()
-    @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
     @hookFile = "#{@repoDir}/.git/hooks/post-receive"
     @logFile = "#{@repoDir}/ggg.log"
     @upstartFile = "/etc/init/#{@id}.conf"
+
+    if @isLocal
+      @host = "localhost"
+      @repoUrl = @repoDir
+    else
+      @host = @config.getHost()
+      @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
+      
 
 
   create: (cb) ->
@@ -59,7 +71,7 @@ class Service
 
     createRemoteScript = @makeCreateScript upstartScript, hookScript, cronScript
 
-    @sshCommand createRemoteScript, (err) ->
+    @runCommand createRemoteScript, (err) ->
       if err? then return cb err
       cb()
 
@@ -129,7 +141,7 @@ class Service
 
         # now install and run
         installCommand = @makeInstallCommand() + "\n" + @makeRestartCommand()
-        @sshCommand installCommand, (err) =>
+        @runCommand installCommand, (err) =>
           if err? then return cb err
 
           # no op this so the kill doesn't cause an error!
@@ -159,25 +171,25 @@ class Service
 
   restart: (cb) ->
     @log "RESTARTING"
-    @sshCommand @makeRestartCommand(), cb
+    @runCommand @makeRestartCommand(), cb
 
   stop: (cb) ->
     @log "STOPPING"
-    @sshCommand "stop #{@id};", cb
+    @runCommand "stop #{@id};", cb
 
   start: (cb) ->
     @log "STARTING"
-    @sshCommand "start #{@id};", cb
+    @runCommand "start #{@id};", cb
 
   # this will never exit. You have to Command-C it, or stop the spawned process
   serverLogs: (lines, cb) ->
     @log "Tailing #{@logFile}... Control-C to exit"
     @log "-------------------------------------------------------------"
-    @sshCommand "tail -n #{lines} -f #{@logFile}", cb
+    @runCommand "tail -n #{lines} -f #{@logFile}", cb
 
   getHistory: (revisions, cb) ->
     @log "Retrieving last #{revisions} deploys, most recent first!"
     @log "-------------------------------------------------------------"
-    @sshCommand "tail -n #{revisions} #{@historyFile} | tac", cb
+    @runCommand "tail -n #{revisions} #{@historyFile} | tac", cb
 
 module.exports = Service

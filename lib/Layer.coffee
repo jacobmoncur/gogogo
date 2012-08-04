@@ -3,6 +3,7 @@ path = require "path"
 {EventEmitter} = require "events"
 Service = require "./Service"
 Server = require "./Server"
+Local = require "./Local"
 async = require "async"
 {curry} = require "fjs"
 
@@ -14,17 +15,30 @@ class Layer extends EventEmitter
     @runPlugins layer, mainConfig, (err) =>
       return @emit "error", err if err?
 
-      if layer.hosts.length > 1
-        @groupDeploy = true
-
-      console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
-
       @services = []
-      for server in layer.hosts
-        serverConfig = new Server @name, server, layer, mainConfig 
-        @services.push new Service(@name, @repoName, serverConfig, this)
+
+      if layer.local
+        @localDeploy layer, mainConfig
+      else
+        @remoteDeploy layer, mainConfig
 
       @emit "ready"
+
+  remoteDeploy: (layer, mainConfig) =>
+    console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
+    if layer.hosts.length > 1
+      @groupDeploy = true
+
+    for server in layer.hosts
+      serverConfig = new Server @name, server, layer, mainConfig 
+      @services.push new Service(@name, @repoName, serverConfig, this)
+
+  localDeploy: (layer, mainConfig) =>
+    @groupDeploy = false
+
+    localConfig = new Local @name, layer, mainConfig
+    console.log "DEPLOYING LOCALLY"
+    @services.push new Service(@name, @repoName, localConfig, this, true)
 
   # we resolve and run the plugins here, as they can change any parameters here
   runPlugins: (layer, mainConfig, cb) ->
