@@ -113,7 +113,7 @@ class Service
       git init
       git config receive.denyCurrentBranch ignore
 
-      sudo echo "#{upstart}" > #{@upstartFile}
+      echo "#{upstart}" | sudo tee #{@upstartFile}
 
       echo "#{hook}" > #{@hookFile}
       chmod +x #{@hookFile}
