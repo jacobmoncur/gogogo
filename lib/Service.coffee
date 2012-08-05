@@ -23,15 +23,15 @@ class Service
 
   # runs the commands and dumps output as we get it
   localCommand: (command, args, cb) ->
-    process = spawn command, args, {env: process.env}
-    process.stdout.on 'data', (data) => @log data.toString().replace(/\n$/, "")
-    process.stderr.on 'data', (data) => @log data.toString().replace(/\n$/, "")
+    proc = spawn command, args, {env: process.env}
+    proc.stdout.on 'data', (data) => @log data.toString().replace(/\n$/, "")
+    proc.stderr.on 'data', (data) => @log data.toString().replace(/\n$/, "")
 
-    process.on 'exit', (code) ->
+    proc.on 'exit', (code) ->
       if code then return cb(new Error("Command Failed"))
       cb()
 
-    return process
+    return proc
 
   constructor: (@name, @repoName, @config, @parent, @isLocal = false) ->
     # pre compute all the fields we might need
