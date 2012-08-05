@@ -168,11 +168,6 @@ reponame = (dir, cb) ->
       cb null, path.basename(url).replace(".git","")
 
 
-# write a config file
-writeConfig = (f, obj, cb) ->
-  fs.mkdir path.dirname(f), (err) ->
-    fs.writeFile f, "module.exports = " + JSON.stringify(obj), 0o0775, cb
-
 # gets the main path for config
 mainConfigPath = -> path.join process.cwd(), CONFIG
 
