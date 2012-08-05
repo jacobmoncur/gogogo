@@ -27,8 +27,8 @@ class Cron
     cronFile = @makeFileName cron.name
     cronScript = @makeCronScript cron
     """
-      echo "#{cronScript}" > #{cronFile}
-      chmod 0644 #{cronFile}
+      sudo echo "#{cronScript}" > #{cronFile}
+      sudo chmod 0644 #{cronFile}
     """
 
   buildCron: ->

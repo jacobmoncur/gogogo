@@ -18,6 +18,7 @@ Installation
 Change Log
 ----------
 
+* 0.4.3 - added support for local deploys, and sudo for non-root users (see note below)
 * 0.4.0 - Added support for tracking support history, plugins, and a chef plugin
 * 0.3.3 - multi cron support, plus per-layer config
 * 0.3.0 - custom config file, cron support
@@ -31,6 +32,7 @@ Server Requirements
 1. Upstart (included with ubuntu)
 2. SSH Access
 3. Git installed on both local computer and server
+4. for non-root users, sudo must work without a password
 
 Usage
 -----

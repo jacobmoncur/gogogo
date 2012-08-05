@@ -113,7 +113,7 @@ class Service
       git init
       git config receive.denyCurrentBranch ignore
 
-      echo "#{upstart}" > #{@upstartFile}
+      sudo echo "#{upstart}" > #{@upstartFile}
 
       echo "#{hook}" > #{@hookFile}
       chmod +x #{@hookFile}
@@ -162,8 +162,8 @@ class Service
   makeRestartCommand: -> 
     """
       echo '\nRESTARTING'
-      stop #{@id}
-      start #{@id}
+      sudo stop #{@id}
+      sudo start #{@id}
       echo '[√] restarted'
     """
 
@@ -173,11 +173,11 @@ class Service
 
   stop: (cb) ->
     @log "STOPPING"
-    @runCommand "stop #{@id};", cb
+    @runCommand "sudo stop #{@id};", cb
 
   start: (cb) ->
     @log "STARTING"
-    @runCommand "start #{@id};", cb
+    @runCommand "sudo start #{@id};", cb
 
   # this will never exit. You have to Command-C it, or stop the spawned process
   serverLogs: (lines, cb) ->
