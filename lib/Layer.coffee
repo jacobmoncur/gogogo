@@ -3,7 +3,6 @@ path = require "path"
 {EventEmitter} = require "events"
 Service = require "./Service"
 Server = require "./Server"
-Local = require "./Local"
 async = require "async"
 {curry} = require "fjs"
 
@@ -11,34 +10,29 @@ async = require "async"
 
 class Layer extends EventEmitter
 
-  constructor: (@name, layer, @repoName, mainConfig) ->
+  constructor: (@name, layer, @repoName, mainConfig, isLocal) ->
     @runPlugins layer, mainConfig, (err) =>
       return @emit "error", err if err?
 
       @services = []
 
-      if layer.local
-        @localDeploy layer, mainConfig
+      # if we are local, we want to keep around one host to parse its info, but
+      # we just want to deploy locally
+      if isLocal
+        console.log "DEPLOYING LOCALLY"
+        layer.hosts = [layer.hosts[0]]
+        console.log name, layer
       else
-        @remoteDeploy layer, mainConfig
+        console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
+
+      if layer.hosts.length > 1
+        @groupDeploy = true
+
+      for server in layer.hosts
+        serverConfig = new Server @name, server, layer, mainConfig 
+        @services.push new Service(@name, @repoName, serverConfig, this, isLocal)
 
       @emit "ready"
-
-  remoteDeploy: (layer, mainConfig) =>
-    console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
-    if layer.hosts.length > 1
-      @groupDeploy = true
-
-    for server in layer.hosts
-      serverConfig = new Server @name, server, layer, mainConfig 
-      @services.push new Service(@name, @repoName, serverConfig, this)
-
-  localDeploy: (layer, mainConfig) =>
-    @groupDeploy = false
-
-    localConfig = new Local @name, layer, mainConfig
-    console.log "DEPLOYING LOCALLY"
-    @services.push new Service(@name, @repoName, localConfig, this, true)
 
   # we resolve and run the plugins here, as they can change any parameters here
   runPlugins: (layer, mainConfig, cb) ->

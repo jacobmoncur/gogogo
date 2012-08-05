@@ -50,8 +50,6 @@ class Service
       @host = @config.getHost()
       @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
       
-
-
   create: (cb) ->
     @log " - id: #{@id}"
     @log " - repo: #{@repoDir}"

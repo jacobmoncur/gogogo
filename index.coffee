@@ -25,6 +25,7 @@ Layer = require "./lib/Layer"
 
 program
   .version(VERSION)
+  .option("-l, --local", "deploy locally for bootstrapping")
 
 program
   .command("init")
@@ -188,7 +189,7 @@ getLayer = (name, cb) ->
     layerConfig = mainConfig.getLayerByName name
     if !layerConfig then return cb new Error("Invalid Layer Name: #{name}")
 
-    layer = new Layer name, layerConfig, repoName, mainConfig
+    layer = new Layer name, layerConfig, repoName, mainConfig, program.local
     layer.on "error", (err) -> return cb err
     layer.on "ready", ->
       cb null, layer 
