@@ -11,7 +11,7 @@ class Service
     @parent.log @host, msg
 
   sshCommand: (commands, cb) =>
-    @localCommand 'ssh', [@host, commands], (err) ->
+    @localCommand 'ssh', ["-o StrictHostKeyChecking=no", @host, commands], (err) ->
       if err? then return cb new Error "SSH Command Failed"
       cb()
 

@@ -223,5 +223,8 @@ To reinstall, run `npm install -g gogogo` again, then redo the create step in yo
 
 Commit ggg.js to your repo, so anyone using the repo can deploy as long as they have ssh access to the server.
 
+### IMPORTANT NOTES!
+
+SSH is run with host key checking disabled! Its up to you to verify the authenticity of your hosts!
 
 
