@@ -5,7 +5,7 @@
   "contributors": [
     "Addison Higham <addisonj@gmail.com> (github.com/addisonj)"
   ],
-  "version": "0.4.1",
+  "version": "0.4.2",
   "repository": { "url": "git@github.com:idottv/gogogo.git" },
   "bin": { 
     "gogogo" : "bin/gogogo.js",
