@@ -21,7 +21,6 @@ class Layer extends EventEmitter
       if isLocal
         console.log "DEPLOYING LOCALLY"
         layer.hosts = [layer.hosts[0]]
-        console.log name, layer
       else
         console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
 
