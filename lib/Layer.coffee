@@ -10,19 +10,26 @@ async = require "async"
 
 class Layer extends EventEmitter
 
-  constructor: (@name, layer, @repoName, mainConfig) ->
+  constructor: (@name, layer, @repoName, mainConfig, isLocal) ->
     @runPlugins layer, mainConfig, (err) =>
       return @emit "error", err if err?
+
+      @services = []
+
+      # if we are local, we want to keep around one host to parse its info, but
+      # we just want to deploy locally
+      if isLocal
+        console.log "DEPLOYING LOCALLY"
+        layer.hosts = [layer.hosts[0]]
+      else
+        console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
 
       if layer.hosts.length > 1
         @groupDeploy = true
 
-      console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
-
-      @services = []
       for server in layer.hosts
         serverConfig = new Server @name, server, layer, mainConfig 
-        @services.push new Service(@name, @repoName, serverConfig, this)
+        @services.push new Service(@name, @repoName, serverConfig, this, isLocal)
 
       @emit "ready"
 

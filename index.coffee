@@ -25,6 +25,7 @@ Layer = require "./lib/Layer"
 
 program
   .version(VERSION)
+  .option("-l, --local", "deploy locally for bootstrapping")
 
 program
   .command("init")
@@ -168,11 +169,6 @@ reponame = (dir, cb) ->
       cb null, path.basename(url).replace(".git","")
 
 
-# write a config file
-writeConfig = (f, obj, cb) ->
-  fs.mkdir path.dirname(f), (err) ->
-    fs.writeFile f, "module.exports = " + JSON.stringify(obj), 0o0775, cb
-
 # gets the main path for config
 mainConfigPath = -> path.join process.cwd(), CONFIG
 
@@ -193,7 +189,7 @@ getLayer = (name, cb) ->
     layerConfig = mainConfig.getLayerByName name
     if !layerConfig then return cb new Error("Invalid Layer Name: #{name}")
 
-    layer = new Layer name, layerConfig, repoName, mainConfig
+    layer = new Layer name, layerConfig, repoName, mainConfig, program.local
     layer.on "error", (err) -> return cb err
     layer.on "ready", ->
       cb null, layer 
