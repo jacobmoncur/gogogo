@@ -23,7 +23,7 @@ class Service
 
   # runs the commands and dumps output as we get it
   localCommand: (command, args, cb) ->
-    process = spawn command, args
+    process = spawn command, args, {env: process.env}
     process.stdout.on 'data', (data) => @log data.toString().replace(/\n$/, "")
     process.stderr.on 'data', (data) => @log data.toString().replace(/\n$/, "")
 
@@ -45,6 +45,8 @@ class Service
 
     if @isLocal
       @host = "localhost"
+      # for some reason, things aren't preserved, so manually make sure this is set!
+      @repoDir = "#{process.env.HOME}/#{PREFIX}/#{@id}"
       @repoUrl = @repoDir
     else
       @host = @config.getHost()
