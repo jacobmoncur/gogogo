@@ -12,7 +12,7 @@ CONFIG = "ggg"
 
 LOGS_LINES = 40
 COMMIT_HISTORY = 5
-VERSION = "0.4.3"
+VERSION = "0.4.4"
 
 {exec} = require "child_process"
 fs = require 'fs'

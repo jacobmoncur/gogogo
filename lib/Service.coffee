@@ -42,6 +42,7 @@ class Service
     @hookFile = "#{@repoDir}/.git/hooks/post-receive"
     @logFile = "#{@repoDir}/ggg.log"
     @upstartFile = "/etc/init/#{@id}.conf"
+    @noUpstart = true if not @config.getStart()
 
     if @isLocal
       @host = "localhost"
@@ -59,7 +60,10 @@ class Service
     @log " - start: #{@config.getStart()}"
     @log " - install: #{@config.getInstall()}"
 
-    upstartScript = @makeUpstartScript()
+    upstartScript = ""
+    if not @noUpstart
+      upstartScript = @makeUpstartScript()
+
     hookScript = @makeHookScript()
     # CRON SUPPORT
     cronConfig = @config.getCron()
@@ -102,6 +106,10 @@ class Service
   makeCreateScript: (upstart, hook, cronInstallScript) ->
     # command
     # denyCurrentBranch ignore allows it to accept pushes without complaining
+    upstartInstall = ""
+    if upstart
+      upstartInstall = "echo \"#{upstart}\" | sudo tee #{@upstartFile}"
+
     """
       echo '\nCREATING...'
       mkdir -p #{@repoDir}
@@ -115,8 +123,8 @@ class Service
       git init
       git config receive.denyCurrentBranch ignore
 
-      echo "#{upstart}" | sudo tee #{@upstartFile}
-
+      #{upstartInstall}
+      
       echo "#{hook}" > #{@hookFile}
       chmod +x #{@hookFile}
       echo "[√] created"
@@ -162,6 +170,7 @@ class Service
     """
 
   makeRestartCommand: -> 
+    return "" if @noUpstart
     """
       echo '\nRESTARTING'
       sudo stop #{@id}
@@ -170,14 +179,17 @@ class Service
     """
 
   restart: (cb) ->
+    return @log "nothing to restart" if @noUpstart
     @log "RESTARTING"
     @runCommand @makeRestartCommand(), cb
 
   stop: (cb) ->
+    return @log "nothing to stop" if @noUpstart
     @log "STOPPING"
     @runCommand "sudo stop #{@id};", cb
 
   start: (cb) ->
+    return @log "nothing to start" if @noUpstart
     @log "STARTING"
     @runCommand "sudo start #{@id};", cb
 
