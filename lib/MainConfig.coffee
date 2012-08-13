@@ -32,6 +32,9 @@ class MainConfig
   getPlugins: ->
     @plugins
 
+  disablePlugins: ->
+    @plugins = null
+
   getLayerNames: ->
     Object.keys @layers
 
