@@ -40,6 +40,7 @@ module.exports = (opts, cb) ->
   return cb new Error "no user specified" if not opts.user
   findHost = opts.findHost || defaultFindHost
   knife = opts.knifePath || knife
+  lastCheckInHours = opts.checkIn || lastCheckInHours
 
   env = opts.env || "_default"
   getNodesByRoleAndEnv opts.role, env, (err, nodes) ->
