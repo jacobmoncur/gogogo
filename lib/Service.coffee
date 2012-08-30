@@ -86,6 +86,7 @@ class Service
     """
       description '#{@id}'
       start on startup
+      limit nofile 10000 15000
       respawn
       respawn limit 5 5 
       exec su #{@serverUser} -c 'cd #{@repoDir} && #{@config.getStart()}' >> #{@logFile} 2>&1
