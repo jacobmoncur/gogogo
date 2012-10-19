@@ -130,7 +130,7 @@ init = (cb) ->
       // cron jobs (from your app folder)
       cron: {
         someTask: { time: "0 3 * * *", command: "node sometask.js"},
-      }
+      },
 
       // servers to deploy to
       servers: {
