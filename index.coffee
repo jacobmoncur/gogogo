@@ -1,5 +1,5 @@
 ###
-CLI to automatically deploy stuff, kind of like heroku. 
+CLI to automatically deploy stuff, kind of like heroku.
 Ubuntu only! (upstart)
 
 TODO remember last command again
@@ -200,7 +200,7 @@ getLayer = (name, cb) ->
     layer = new Layer name, layerConfig, repoName, mainConfig, program.local
     layer.on "error", (err) -> return cb err
     layer.on "ready", ->
-      cb null, layer 
+      cb null, layer
 
 # our handler on the finish
 finish = (err) ->
