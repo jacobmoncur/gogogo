@@ -1,7 +1,7 @@
 
 class Cron
 
-  constructor: (cronConfig, @id, @repoDir, @serverUser, @cronDir = "/etc/cron.d") ->
+  constructor: (cronConfig, @id, @repoDir, @serverUser, @logRotateDir = "/etc/logrotate.d", @cronDir = "/etc/cron.d") ->
     @cronJobs = []
 
     for name, cf of cronConfig
@@ -9,7 +9,9 @@ class Cron
       @cronJobs.push @validate cf
 
   makeFileName: (name) -> "#{@cronDir}/#{@id}_cron_#{name}"
-  makeLogFile: (name) -> "cron_#{name}.txt"
+  makeLogFile: (name) -> "cron_#{name}.log"
+  makeLogPath: (name) -> "#{@repoDir}/#{@makeLogFile name}"
+  makeRotateFile: (name) -> "#{@logRotateDir}/#{@id}_cron_#{name}.conf" 
 
   validate: (cron) ->
     if not cron.name or not cron.time or not cron.command
@@ -23,12 +25,28 @@ class Cron
       #{cron.time} #{@serverUser} cd #{@repoDir} && #{cron.command} >> #{logFile} 2>&1
     """
 
+  makeRotateScript: (name) ->
+    """
+    #{@makeLogPath name} {
+      daily
+      copytruncate
+      rotate 7
+      compress
+      notifempty
+      missingok
+    }
+    """
+
   makeScript: (cron) ->
     cronFile = @makeFileName cron.name
     cronScript = @makeCronScript cron
+    rotateFile = @makeRotateFile cron.name
+    rotateScript = @makeRotateScript cron.name
     """
       echo "#{cronScript}" | sudo tee #{cronFile}
       sudo chmod 0644 #{cronFile}
+      echo "#{rotateScript}" | sudo tee #{rotateFile}
+      sudo chmod 0644 #{rotateFile}
     """
 
   buildCron: ->

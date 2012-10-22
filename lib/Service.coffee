@@ -42,6 +42,7 @@ class Service
     @hookFile = "#{@repoDir}/.git/hooks/post-receive"
     @logFile = "#{@repoDir}/ggg.log"
     @upstartFile = "/etc/init/#{@id}.conf"
+    @logRotateFile = "/etc/logrotate.d/#{@id}.conf"
     @noUpstart = true if not @config.getStart()
 
     if @isLocal
@@ -93,6 +94,18 @@ class Service
       exec su #{@serverUser} -c 'cd #{@repoDir} && #{@config.getStart()}' >> #{@logFile} 2>&1
     """
 
+  makeLogRotate: ->
+    """
+    #{@logFile} {
+      daily
+      copytruncate
+      rotate 7
+      compress
+      notifempty
+      missingok
+    }
+    """
+
   makeHookScript: ->
     # http://toroid.org/ams/git-website-howto
     # this hook ensures that we check out the right revision and also keep track of what we have deploy
@@ -110,7 +123,10 @@ class Service
     # denyCurrentBranch ignore allows it to accept pushes without complaining
     upstartInstall = ""
     if upstart
-      upstartInstall = "echo \"#{upstart}\" | sudo tee #{@upstartFile}"
+      upstartInstall = """
+      echo "#{upstart}" | sudo tee #{@upstartFile}
+      echo "#{@makeLogRotate()}" | sudo tee #{@logRotateFile}"
+      """
 
     """
       echo '\nCREATING...'
