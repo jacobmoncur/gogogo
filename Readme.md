@@ -18,6 +18,7 @@ Installation
 Change Log
 ----------
 
+* 0.4.8 - automatically add logrotate files, make upstart work properly on reboot
 * 0.4.3 - added support for local deploys, and sudo for non-root users (see note below)
 * 0.4.0 - Added support for tracking support history, plugins, and a chef plugin
 * 0.3.3 - multi cron support, plus per-layer config
@@ -55,12 +56,12 @@ module.exports = {
   // cron jobs (from your app folder)
   cron: {
     someTask: { time: "0 3 * * *", command: "node sometask.js"},
-  }
+  },
 
   // servers to deploy to
   servers: {
     dev: "deploy@dev.mycompany.com",
-    staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"]
+    staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"],
     prod: {
       hosts: ["deploy@mycompany.com", "deploy@backup.mycompany.com"],
       cron: {

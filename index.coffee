@@ -12,7 +12,7 @@ CONFIG = "ggg"
 
 LOGS_LINES = 40
 COMMIT_HISTORY = 5
-VERSION = "0.4.6"
+VERSION = "0.4.8"
 
 {exec} = require "child_process"
 fs = require 'fs'
@@ -135,7 +135,7 @@ init = (cb) ->
       // servers to deploy to
       servers: {
         dev: "deploy@dev.mycompany.com",
-        staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"]
+        staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"],
         prod: {
           hosts: ["deploy@mycompany.com", "deploy@backup.mycompany.com"],
           cron: {
