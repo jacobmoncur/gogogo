@@ -125,7 +125,7 @@ class Service
     if upstart
       upstartInstall = """
       echo "#{upstart}" | sudo tee #{@upstartFile}
-      echo "#{@makeLogRotate()}" | sudo tee #{@logRotateFile}"
+      echo "#{@makeLogRotate()}" | sudo tee #{@logRotateFile}
       """
 
     """
