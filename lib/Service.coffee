@@ -86,8 +86,8 @@ class Service
     # http://serverfault.com/questions/128605/have-upstart-read-environment-from-etc-environment-for-a-service
     """
       description '#{@id}'
-      start on [2345]
-      stop on [!2345]
+      start on (filesystem and net-device-up)
+      stop on runlevel [!2345]
       limit nofile 10000 15000
       respawn
       respawn limit 5 5 
