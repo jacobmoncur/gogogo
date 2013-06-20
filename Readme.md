@@ -18,7 +18,7 @@ Installation
 Change Log
 ----------
 
-* 0.4.10 - Add a command to run a command on the server
+* 0.4.10 - Add a command to run a command on the server, plus colorized output
 * 0.4.8 - automatically add logrotate files, make upstart work properly on reboot
 * 0.4.3 - added support for local deploys, and sudo for non-root users (see note below)
 * 0.4.0 - Added support for tracking support history, plugins, and a chef plugin
