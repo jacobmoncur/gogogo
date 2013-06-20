@@ -53,7 +53,7 @@ class Service
     else
       @host = @config.getHost()
       @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
-      
+
   create: (cb) ->
     @log " - id: #{@id}"
     @log " - repo: #{@repoDir}"
@@ -90,7 +90,7 @@ class Service
       stop on runlevel [!2345]
       limit nofile 10000 15000
       respawn
-      respawn limit 5 5 
+      respawn limit 5 5
       exec su #{@serverUser} -c 'cd #{@repoDir} && #{@config.getStart()}' >> #{@logFile} 2>&1
     """
 
@@ -133,7 +133,7 @@ class Service
       mkdir -p #{@repoDir}
       cd #{@repoDir}
       echo "Locating git"
-      which git 
+      which git
       if (( $? )); then
           echo "Could not locate git"
           exit 1
@@ -142,7 +142,7 @@ class Service
       git config receive.denyCurrentBranch ignore
 
       #{upstartInstall}
-      
+
       echo "#{hook}" > #{@hookFile}
       chmod +x #{@hookFile}
       echo "[√] created"
@@ -174,7 +174,7 @@ class Service
           command = @serverLogs 10, ->
 
           # for some reason it takes a while to actually kill it, like 10s
-          kill = -> 
+          kill = ->
             command.kill()
             cb()
           setTimeout kill, 2000
@@ -187,7 +187,7 @@ class Service
       echo '[√] installed'
     """
 
-  makeRestartCommand: -> 
+  makeRestartCommand: ->
     return "" if @noUpstart
     """
       echo '\nRESTARTING'
@@ -221,5 +221,9 @@ class Service
     @log "Retrieving last #{revisions} deploys, most recent first!"
     @log "-------------------------------------------------------------"
     @runCommand "tail -n #{revisions} #{@historyFile} | tac", cb
+
+  runCommandInRepo: (command, cb) ->
+    @log "Running command #{command} in #{@repoDir}"
+    @runCommand "cd #{@repoDir} && #{command}", cb
 
 module.exports = Service

@@ -28,7 +28,7 @@ class Layer extends EventEmitter
         @groupDeploy = true
 
       for server in layer.hosts
-        serverConfig = new Server @name, server, layer, mainConfig 
+        serverConfig = new Server @name, server, layer, mainConfig
         @services.push new Service(@name, @repoName, serverConfig, this, isLocal)
 
       @emit "ready"
@@ -84,6 +84,12 @@ class Layer extends EventEmitter
     withRevisions = @historyOne revisions
     async.forEach @services, withRevisions, cb
 
+  runCommandOne: curry (command, service, cb) ->
+    service.runCommandInRepo command, cb
+
+  runCommand: (command, cb) ->
+    async.forEach @services, @runCommandOne(command), cb
+
   # do these ones generically, because no params
   restart: (cb) ->
     @serviceAction "restart", cb
@@ -102,9 +108,9 @@ class Layer extends EventEmitter
     service[action] cb
 
   log: (parentAddress, msg) ->
-    if @groupDeploy 
+    if @groupDeploy
       console.log "#{parentAddress}: #{msg}"
     else
       console.log msg
 
-module.exports = Layer 
+module.exports = Layer

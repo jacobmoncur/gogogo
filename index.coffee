@@ -12,7 +12,7 @@ CONFIG = "ggg"
 
 LOGS_LINES = 40
 COMMIT_HISTORY = 5
-VERSION = "0.4.8"
+VERSION = require("./package.json").version
 
 {exec} = require "child_process"
 fs = require 'fs'
@@ -91,6 +91,14 @@ program
       return finish err if err?
       revisions = program.args.revisions || COMMIT_HISTORY
       layer.commitHistory revisions, finish
+
+program
+  .command("command <name> <command>")
+  .description("run a command over ssh in the root of your project directory")
+  .action (name, command) ->
+    getLayer name, (err, layer) ->
+      return finish err if err?
+      layer.runCommand command, finish
 
 program
   .command("list")

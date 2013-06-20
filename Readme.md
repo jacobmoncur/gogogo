@@ -6,7 +6,7 @@ Gogogo is a simple command-line tool designed to let you deploy web applications
 ### Goals
 
 1. Easy to setup
-2. Easy to redeploy 
+2. Easy to redeploy
 3. Deploy to multiple servers
 4. Deploy different branches to the same server
 
@@ -18,13 +18,14 @@ Installation
 Change Log
 ----------
 
+* 0.4.10 - Add a command to run a command on the server
 * 0.4.8 - automatically add logrotate files, make upstart work properly on reboot
 * 0.4.3 - added support for local deploys, and sudo for non-root users (see note below)
 * 0.4.0 - Added support for tracking support history, plugins, and a chef plugin
 * 0.3.3 - multi cron support, plus per-layer config
 * 0.3.0 - custom config file, cron support
 * 0.2.6 - git push force
-* 0.2.5 - Server Environment variables are preserved! Deploy monitors the log for a couple seconds. 
+* 0.2.5 - Server Environment variables are preserved! Deploy monitors the log for a couple seconds.
 * 0.2.0 - gogogo list, logs, start, stop, restart, deploy
 
 Server Requirements
@@ -100,7 +101,7 @@ module.exports = function(opts, cb) {
 where opts is a hash of user definied options
 
 
-Currently, there is one bundled plugin, chefHosts, which integrates with opscode's knife to 
+Currently, there is one bundled plugin, chefHosts, which integrates with opscode's knife to
 retrieve a list of servers to deploy too. Example of using a plugin is show below
 
 ``` JavaScript
@@ -120,7 +121,7 @@ plugins: {
 ...
 ```
 
-    
+
 Limitations
 -----------
 
@@ -148,6 +149,7 @@ Help
     gogogo logs <name> — tail remote log
     gogogo list — show available names
     gogogo history <name> - shows a history of deployed commits
+    gogogo command <name> <command> - run a command on the server in base directory
 
 
     gogogo has an alias of ggg for saving you those precious keystrokes
@@ -166,10 +168,10 @@ Gogogo currently supports a single cron action.
 ```
 
 It will create a script in /etc/cron.d/, set the permissions correctly, and redirect log output to `cron.txt`
- 
+
 ### Environment variables
 
-If they are the same no matter which server is deployed, put them in your start script. 
+If they are the same no matter which server is deployed, put them in your start script.
 
     "start":"DB_HOST=localhost node app.js"
 
@@ -220,7 +222,7 @@ Note that for web servers you'll want to change the port in your featurex branch
 
 ### Reinstall / Upgrade
 
-To reinstall, run `npm install -g gogogo` again, then redo the create step in your repository. 
+To reinstall, run `npm install -g gogogo` again, then redo the create step in your repository.
 
 ### Gitignore
 
