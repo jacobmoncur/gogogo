@@ -5,7 +5,17 @@ Service = require "./Service"
 Server = require "./Server"
 async = require "async"
 {curry} = require "fjs"
+clc = require "cli-color"
 
+COLORS = [
+  "white",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan"
+]
 # Represnts a layer for deployment
 
 class Layer extends EventEmitter
@@ -24,12 +34,15 @@ class Layer extends EventEmitter
       else
         console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
 
+      @colorMap = {}
       if layer.hosts.length > 1
         @groupDeploy = true
 
-      for server in layer.hosts
+      for server, index in layer.hosts
         serverConfig = new Server @name, server, layer, mainConfig
-        @services.push new Service(@name, @repoName, serverConfig, this, isLocal)
+        service = new Service(@name, @repoName, serverConfig, this, isLocal)
+        @services.push service
+        @colorMap[service.host] = COLORS[index % COLORS.length]
 
       @emit "ready"
 
@@ -108,8 +121,12 @@ class Layer extends EventEmitter
     service[action] cb
 
   log: (parentAddress, msg) ->
+    logLine = (line) =>
+      color = @colorMap[parentAddress] || "white"
+      console.log clc[color](parentAddress + ": ") + line
+
     if @groupDeploy
-      console.log "#{parentAddress}: #{msg}"
+      msg.split("\n").forEach logLine
     else
       console.log msg
 
