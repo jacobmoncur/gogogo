@@ -160,7 +160,7 @@ init = (cb) ->
   console.log "*** Written to ggg.js ***"
   console.log initConfigContent
 
-  fs.writeFile mainConfigPath() + ".js", initConfigContent, 0o0755, cb
+  fs.writeFile mainConfigPath() + ".js", initConfigContent, cb
 
 list = (mainConfig, cb) ->
   console.log "GOGOGO servers (see ggg.js)"
