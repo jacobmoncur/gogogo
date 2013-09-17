@@ -142,14 +142,14 @@ Help
 
     gogogo help
     gogogo init - creates a ggg.js config file for you
-    gogogo deploy <name> <branch> — deploys branch to named server
-    gogogo restart <name>
-    gogogo start <name>
-    gogogo stop <name>
-    gogogo logs <name> — tail remote log
+    gogogo deploy <targetName> <branch> — deploys branch to named server
+    gogogo restart <targetName>
+    gogogo start <targetName>
+    gogogo stop <targetName>
+    gogogo logs <targetName> — tail remote log
     gogogo list — show available names
-    gogogo history <name> - shows a history of deployed commits
-    gogogo command <name> <command> - run a command on the server in base directory
+    gogogo history <targetName> - shows a history of deployed commits
+    gogogo command <targetName> <command> - run a command on the server in base directory
 
 
     gogogo has an alias of ggg for saving you those precious keystrokes
