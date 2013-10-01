@@ -11,7 +11,7 @@ class Cron
   makeFileName: (name) -> "#{@cronDir}/#{@id}_cron_#{name}"
   makeLogFile: (name) -> "cron_#{name}.log"
   makeLogPath: (name) -> "#{@repoDir}/#{@makeLogFile name}"
-  makeRotateFile: (name) -> "#{@logRotateDir}/#{@id}_cron_#{name}.conf" 
+  makeRotateFile: (name) -> "#{@logRotateDir}/#{@id}_cron_#{name}.conf"
 
   validate: (cron) ->
     if not cron.name or not cron.time or not cron.command
@@ -22,7 +22,7 @@ class Cron
     logFile = @makeLogFile cron.name
     """
       PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      #{cron.time} #{@serverUser} cd #{@repoDir} && #{cron.command} >> #{logFile} 2>&1
+      #{cron.time} #{@serverUser} cd #{@repoDir} && (#{cron.command}) >> #{logFile} 2>&1
     """
 
   makeRotateScript: (name) ->
