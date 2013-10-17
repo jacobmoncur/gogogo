@@ -110,6 +110,12 @@ program
       list mainConfig, finish
 
 program
+  .command("servers <name>")
+  .description("lists deploy server locations")
+  .action (name) ->
+    getLayer name, finish
+
+program
   .command("help")
   .description("display this help")
   .action ->
