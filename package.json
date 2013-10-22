@@ -6,7 +6,7 @@
     "Addison Higham <addisonj@gmail.com> (github.com/addisonj)",
     "Jamison Dance <jergason@gmail.com> (http://jamisondance.com)"
   ],
-  "version": "0.4.12",
+  "version": "0.4.13",
   "repository": {
     "url": "git@github.com:idottv/gogogo.git"
   },
@@ -30,6 +30,6 @@
     "cli-color": "~0.2.2"
   },
   "engines": {
-    "node": ">= 0.6.x < 0.9.0"
+    "node": ">= 0.6.x < 0.10.0"
   }
 }
