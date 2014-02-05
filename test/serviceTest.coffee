@@ -2,22 +2,27 @@ assert = require 'assert'
 Service = require '../lib/Service'
 
 describe 'Service', ->
+  name = 'mockService'
+  repoName = 'someRepo'
+  config = {
+    getStart: -> 'echo "foo"'
+    getUser: -> 'durp'
+    getHost: -> ''
+    getInstall: -> ''
+    getCron: -> {
+      default: {
+        time: 'wat'
+        command: 'echo "FOO BAR"'
+      }
+    }
+  }
+  parent = {
+    log: ->
+  }
+  s = new Service name, repoName, config, parent
+
   describe '.create', ->
     it 'creates the correct upstart and hook and logrotate files', (done) ->
-      name = 'mockService'
-      repoName = 'someRepo'
-      config = {
-        getStart: -> 'echo "foo"'
-        getUser: -> 'durp'
-        getHost: -> ''
-        getInstall: -> ''
-        getCron: -> ''
-      }
-      parent = {
-        log: ->
-      }
-      s = new Service name, repoName, config, parent
-
       expectedCreateRemoteScript = """
 echo '
 CREATING...'
@@ -56,6 +61,18 @@ cd $HOME/ggg/someRepo_mockService/.git
 GIT_WORK_TREE=$HOME/ggg/someRepo_mockService git reset --hard \\$newrev || exit 1;" > $HOME/ggg/someRepo_mockService/.git/hooks/post-receive
 chmod +x $HOME/ggg/someRepo_mockService/.git/hooks/post-receive
 echo "[√] created"
+echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+wat durp cd $HOME/ggg/someRepo_mockService && (echo "FOO BAR") >> cron_default.log 2>&1" | sudo tee /etc/cron.d/someRepo_mockService_cron_default
+sudo chmod 0644 /etc/cron.d/someRepo_mockService_cron_default
+echo "$HOME/ggg/someRepo_mockService/cron_default.log {
+  daily
+  copytruncate
+  rotate 7
+  compress
+  notifempty
+  missingok
+}" | sudo tee /etc/logrotate.d/someRepo_mockService_cron_default.conf
+sudo chmod 0644 /etc/logrotate.d/someRepo_mockService_cron_default.conf
 
 """
       s.runCommand = (createRemoteScript, cb) ->
@@ -63,3 +80,40 @@ echo "[√] created"
         cb()
 
       s.create done
+
+  describe '.restart', ->
+    it 'returns the right command', (done) ->
+      restartCommand = """
+echo '
+RESTARTING'
+sudo stop someRepo_mockService
+sudo start someRepo_mockService
+echo '[√] restarted'
+"""
+      s.runCommand = (command, cb) ->
+        assert.equal command, restartCommand
+        cb()
+
+      s.restart done
+
+  describe '.stop', ->
+    it 'returns the right command', (done) ->
+      stopCommand = """
+sudo stop someRepo_mockService;
+"""
+      s.runCommand = (command, cb) ->
+        assert.equal command, stopCommand
+        cb()
+
+      s.stop done
+
+  describe '.start', ->
+    it 'returns the right command', (done) ->
+      startCommand = """
+sudo start someRepo_mockService;
+"""
+      s.runCommand = (command, cb) ->
+        assert.equal command, startCommand
+        cb()
+
+      s.start done
