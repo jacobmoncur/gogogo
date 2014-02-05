@@ -5,8 +5,68 @@ Cron = require "./Cron"
 
 PREFIX = "ggg"
 
-isMultipleStartCommand = (startCommand) ->
+isSingleStartCommand = (startCommand) ->
   typeof startCommand is 'string'
+
+createSingleUpstartInstall = (upstart, upstartFile, logRotateCommand, logRotateFile) ->
+  if upstart
+    """
+    echo "#{upstart}" | sudo tee #{upstartFile}
+    echo "#{logRotateCommand}" | sudo tee #{logRotateFile}
+    """
+  else
+    ""
+
+makeUpstartScript = (id, serverUser, repoDir, startCommand, logFile) ->
+  # upstart service
+  # we use 'su root -c' because we need to keep our environment variables
+  # http://serverfault.com/questions/128605/have-upstart-read-environment-from-etc-environment-for-a-service
+  """
+    description '#{id}'
+    start on (filesystem and net-device-up)
+    stop on runlevel [!2345]
+    limit nofile 10000 15000
+    respawn
+    respawn limit 5 5
+    exec su #{serverUser} -c 'cd #{repoDir} && #{startCommand}' >> #{logFile} 2>&1
+  """
+
+
+makeLogRotate = (logFile) ->
+  """
+  #{logFile} {
+    daily
+    copytruncate
+    rotate 7
+    compress
+    notifempty
+    missingok
+  }
+  """
+
+
+makeCreateScript =  (hook, upstartInstall, cronInstallScript, repoDir, hookFile) ->
+  # denyCurrentBranch ignore allows it to accept pushes without complaining
+  """
+    echo '\nCREATING...'
+    mkdir -p #{repoDir}
+    cd #{repoDir}
+    echo "Locating git"
+    which git
+    if (( $? )); then
+        echo "Could not locate git"
+        exit 1
+    fi
+    git init
+    git config receive.denyCurrentBranch ignore
+
+    #{upstartInstall}
+
+    echo "#{hook}" > #{hookFile}
+    chmod +x #{hookFile}
+    echo "[√] created"
+    #{cronInstallScript}
+  """
 
 class Service
   # we let the host group handle the logging
@@ -24,15 +84,6 @@ class Service
       if err? then return cb new Error "SSH Command Failed"
       cb()
 
-  generateConfigForStartCommand: (commandName, command) ->
-    id = "#{@repoName}_#{@name}_#{commandName}"
-    logFile = "#{@repoDir}/#{commandName}.ggg.log"
-    upstartFile = "/etc/init/#{id}.conf"
-    logRotateFile = "/etc/logrotate.d/#{id}.conf"
-
-    upstartScript = @makeUpstartScript id, @serverUser, @repoDir, command, logFile
-    logRotateScript = @makeLogRotate logRotateFile
-
   # runs the commands and dumps output as we get it
   localCommand: (command, args, cb) ->
     proc = spawn command, args, {env: process.env}
@@ -48,23 +99,42 @@ class Service
   constructor: (@name, @repoName, @config, @parent, @isLocal = false) ->
     # pre compute all the fields we might need
     @id = @repoName + "_" + @name
+    @processes = @parseStartCommands @config, @id
+
     @repoDir = "$HOME/#{PREFIX}/#{@id}"
     @historyFile = "$HOME/#{PREFIX}/#{@id}-history.txt"
     @serverUser = @config.getUser()
     @hookFile = "#{@repoDir}/.git/hooks/post-receive"
-    @logFile = "#{@repoDir}/ggg.log"
-    @upstartFile = "/etc/init/#{@id}.conf"
-    @logRotateFile = "/etc/logrotate.d/#{@id}.conf"
-    @noUpstart = true if not @config.getStart()
+    #@logFile = "#{@repoDir}/ggg.log"
+    #@upstartFile = "/etc/init/#{@id}.conf"
+    #@logRotateFile = "/etc/logrotate.d/#{@id}.conf"
+    @noUpstart = !@config.getStart()
 
     if @isLocal
       @host = "localhost"
-      # for some reason, things aren't preserved, so manually make sure this is set!
+      # for some reason, things aren't preserved, so manually make sure this is
+      # set!
       @repoDir = "#{process.env.HOME}/#{PREFIX}/#{@id}"
       @repoUrl = @repoDir
     else
       @host = @config.getHost()
       @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
+
+  parseStartCommands: (config, defaultName) ->
+    start = config.getStart()
+    # some people have no start
+    return {} unless start
+    if isSingleStartCommand start
+      startCmd = start
+      start = {}
+      start[defaultName] = startCmd
+    start
+
+  idForCommand: (commandName, baseId) ->
+    # for the cases where we only have one command, so the baseId is the same
+    # as the command name
+    return commandName if commandName is baseId
+    "#{baseId}_#{commandName}"
 
   create: (cb) ->
     @log " - id: #{@id}"
@@ -72,10 +142,6 @@ class Service
     @log " - remote: #{@repoUrl}"
     @log " - start: #{@config.getStart()}"
     @log " - install: #{@config.getInstall()}"
-
-    upstartScript = ""
-    unless @noUpstart
-      upstartScript = @makeUpstartScript @id, @serverUser, @repoDir, @config.getStart(), @logFile
 
     hookScript = @makeHookScript @historyFile, @repoDir
     # CRON SUPPORT
@@ -86,43 +152,47 @@ class Service
       cron = new Cron cronConfig, @id, @repoDir, @serverUser
       cronScript = cron.buildCron()
 
-    logRotateCommand = @makeLogRotate @logFile
-    createRemoteScript = @makeCreateScript(upstartScript, hookScript,
-      cronScript, @upstartFile, logRotateCommand, @logRotateFile, @hookFile)
+    upstartInstall = @createUpstartInstall @processes, @serverUser, @repoDir
+
+    createRemoteScript = makeCreateScript hookScript, upstartInstall, cronScript,  @repoDir, @hookFile
 
     @runCommand createRemoteScript, (err) ->
       if err? then return cb err
       cb()
 
-  makeUpstartScript: (id, serverUser, repoDir, startCommand, logFile) ->
-    # upstart service
-    # we use 'su root -c' because we need to keep our environment variables
-    # http://serverfault.com/questions/128605/have-upstart-read-environment-from-etc-environment-for-a-service
-    """
-      description '#{id}'
-      start on (filesystem and net-device-up)
-      stop on runlevel [!2345]
-      limit nofile 10000 15000
-      respawn
-      respawn limit 5 5
-      exec su #{serverUser} -c 'cd #{repoDir} && #{config.getStart()}' >> #{logFile} 2>&1
-    """
+  # return the string to create one or more upstart and logrotate commands
+  # for runProcesses
+  #
+  # @param runProcesses Object - hash of process name to start command
+  # @param serverUser String - username to use to create these files
+  # @param repoDir String - location of the github repo
+  #
+  # @return String a string to be run with exec that will generate the
+  #   upstart and logrotate files
+  createUpstartInstall: (processes, serverUser, repoDir) ->
+    return '' if @noUpstart
+    upstartInstall = ''
+    for commandName, command of processes
+      commandId = @idForCommand commandName, @id
+      logFile = "#{@repoDir}/#{commandName}.ggg.log"
+      upstartFile = "/etc/init/#{commandId}.conf"
+      logRotateFile = "/etc/logrotate.d/#{commandId}.conf"
 
-  makeLogRotate: (logFile) ->
-    """
-    #{logFile} {
-      daily
-      copytruncate
-      rotate 7
-      compress
-      notifempty
-      missingok
-    }
-    """
+
+      console.log 'processes is', processes
+      console.log 'commandId is', commandId
+      upstartScript = makeUpstartScript commandId, serverUser, repoDir, command, logFile
+      logRotateScript = makeLogRotate logRotateFile
+
+      upstartInstall += '\n' + createSingleUpstartInstall upstartScript, upstartFile,
+        logRotateScript, logRotateFile
+
+    upstartInstall
 
   makeHookScript: (historyFile, repoDir) ->
     # http://toroid.org/ams/git-website-howto
-    # this hook ensures that we check out the right revision and also keep track of what we have deploy
+    # this hook ensures that we check out the right revision and also keep
+    # track of what we have deploy
     """
       read oldrev newrev refname
       echo 'GOGOGO checking out:'
@@ -132,36 +202,6 @@ class Service
       GIT_WORK_TREE=#{repoDir} git reset --hard \\$newrev || exit 1;
     """
 
-  makeCreateScript: (upstart, hook, cronInstallScript, upstartFile, logRotateCommand, logRotateFile, repoDir, hookFile) ->
-    # command
-    # denyCurrentBranch ignore allows it to accept pushes without complaining
-    upstartInstall = ""
-    if upstart
-      upstartInstall = """
-      echo "#{upstart}" | sudo tee #{upstartFile}
-      echo "#{logRotateCommand}" | sudo tee #{logRotateFile}
-      """
-
-    """
-      echo '\nCREATING...'
-      mkdir -p #{repoDir}
-      cd #{repoDir}
-      echo "Locating git"
-      which git
-      if (( $? )); then
-          echo "Could not locate git"
-          exit 1
-      fi
-      git init
-      git config receive.denyCurrentBranch ignore
-
-      #{upstartInstall}
-
-      echo "#{hook}" > #{hookFile}
-      chmod +x #{hookFile}
-      echo "[√] created"
-      #{cronInstallScript}
-    """
 
   runHookCommand: (hook, hookFile) ->
     """
