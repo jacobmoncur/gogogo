@@ -192,7 +192,10 @@ getConfigRepo = (cb) ->
   reponame process.cwd(), (err, repoName) ->
     return cb err if err?
     MainConfig.loadFromFile mainConfigPath(), (err, mainConfig) ->
-      if err then return cb new Error "Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=#{err.message}"
+      if err
+        errString = "Bad gogogo config file, ggg.js. Run 'gogogo init' to" +
+        " create one. Err=#{err.message}"
+        return cb new Error errString
 
       cb null, repoName, mainConfig
 
@@ -202,7 +205,7 @@ getLayer = (name, cb) ->
     return cb err if err?
 
     layerConfig = mainConfig.getLayerByName name
-    if !layerConfig then return cb new Error("Invalid Layer Name: #{name}")
+    if !layerConfig then return cb new Error("Invalid layer Name: #{name}")
 
     if program.noPlugin
       layerConfig.plugins = null

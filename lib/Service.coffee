@@ -5,6 +5,9 @@ Cron = require "./Cron"
 
 PREFIX = "ggg"
 
+isMultipleStartCommand = (startCommand) ->
+  typeof startCommand is 'string'
+
 class Service
   # we let the host group handle the logging
   log: (msg) ->
@@ -20,6 +23,15 @@ class Service
     @localCommand 'ssh', ["-o StrictHostKeyChecking=no", @host, commands], (err) ->
       if err? then return cb new Error "SSH Command Failed"
       cb()
+
+  generateConfigForStartCommand: (commandName, command) ->
+    id = "#{@repoName}_#{@name}_#{commandName}"
+    logFile = "#{@repoDir}/#{commandName}.ggg.log"
+    upstartFile = "/etc/init/#{id}.conf"
+    logRotateFile = "/etc/logrotate.d/#{id}.conf"
+
+    upstartScript = @makeUpstartScript id, @serverUser, @repoDir, command, logFile
+    logRotateScript = @makeLogRotate logRotateFile
 
   # runs the commands and dumps output as we get it
   localCommand: (command, args, cb) ->
@@ -62,10 +74,10 @@ class Service
     @log " - install: #{@config.getInstall()}"
 
     upstartScript = ""
-    if not @noUpstart
-      upstartScript = @makeUpstartScript()
+    unless @noUpstart
+      upstartScript = @makeUpstartScript @id, @serverUser, @repoDir, @config.getStart(), @logFile
 
-    hookScript = @makeHookScript()
+    hookScript = @makeHookScript @historyFile, @repoDir
     # CRON SUPPORT
     cronConfig = @config.getCron()
     cronScript = ''
@@ -74,29 +86,31 @@ class Service
       cron = new Cron cronConfig, @id, @repoDir, @serverUser
       cronScript = cron.buildCron()
 
-    createRemoteScript = @makeCreateScript upstartScript, hookScript, cronScript
+    logRotateCommand = @makeLogRotate @logFile
+    createRemoteScript = @makeCreateScript(upstartScript, hookScript,
+      cronScript, @upstartFile, logRotateCommand, @logRotateFile, @hookFile)
 
     @runCommand createRemoteScript, (err) ->
       if err? then return cb err
       cb()
 
-  makeUpstartScript: ->
+  makeUpstartScript: (id, serverUser, repoDir, startCommand, logFile) ->
     # upstart service
     # we use 'su root -c' because we need to keep our environment variables
     # http://serverfault.com/questions/128605/have-upstart-read-environment-from-etc-environment-for-a-service
     """
-      description '#{@id}'
+      description '#{id}'
       start on (filesystem and net-device-up)
       stop on runlevel [!2345]
       limit nofile 10000 15000
       respawn
       respawn limit 5 5
-      exec su #{@serverUser} -c 'cd #{@repoDir} && #{@config.getStart()}' >> #{@logFile} 2>&1
+      exec su #{serverUser} -c 'cd #{repoDir} && #{config.getStart()}' >> #{logFile} 2>&1
     """
 
-  makeLogRotate: ->
+  makeLogRotate: (logFile) ->
     """
-    #{@logFile} {
+    #{logFile} {
       daily
       copytruncate
       rotate 7
@@ -106,32 +120,32 @@ class Service
     }
     """
 
-  makeHookScript: ->
+  makeHookScript: (historyFile, repoDir) ->
     # http://toroid.org/ams/git-website-howto
     # this hook ensures that we check out the right revision and also keep track of what we have deploy
     """
       read oldrev newrev refname
       echo 'GOGOGO checking out:'
       echo \\$newrev
-      echo \\`date\\` - \\$newrev >> #{@historyFile}
-      cd #{@repoDir}/.git
-      GIT_WORK_TREE=#{@repoDir} git reset --hard \\$newrev || exit 1;
+      echo \\`date\\` - \\$newrev >> #{historyFile}
+      cd #{repoDir}/.git
+      GIT_WORK_TREE=#{repoDir} git reset --hard \\$newrev || exit 1;
     """
 
-  makeCreateScript: (upstart, hook, cronInstallScript) ->
+  makeCreateScript: (upstart, hook, cronInstallScript, upstartFile, logRotateCommand, logRotateFile, repoDir, hookFile) ->
     # command
     # denyCurrentBranch ignore allows it to accept pushes without complaining
     upstartInstall = ""
     if upstart
       upstartInstall = """
-      echo "#{upstart}" | sudo tee #{@upstartFile}
-      echo "#{@makeLogRotate()}" | sudo tee #{@logRotateFile}
+      echo "#{upstart}" | sudo tee #{upstartFile}
+      echo "#{logRotateCommand}" | sudo tee #{logRotateFile}
       """
 
     """
       echo '\nCREATING...'
-      mkdir -p #{@repoDir}
-      cd #{@repoDir}
+      mkdir -p #{repoDir}
+      cd #{repoDir}
       echo "Locating git"
       which git
       if (( $? )); then
@@ -143,11 +157,18 @@ class Service
 
       #{upstartInstall}
 
-      echo "#{hook}" > #{@hookFile}
-      chmod +x #{@hookFile}
+      echo "#{hook}" > #{hookFile}
+      chmod +x #{hookFile}
       echo "[√] created"
       #{cronInstallScript}
     """
+
+  runHookCommand: (hook, hookFile) ->
+    """
+      echo "#{hook}" > #{hookFile}
+      chmox +x #{hookFile}
+    """
+
 
   deploy: (branch, cb) ->
 
@@ -187,29 +208,38 @@ class Service
       echo '[√] installed'
     """
 
-  makeRestartCommand: ->
+  makeRestartCommand: (id=@id) ->
     return "" if @noUpstart
     """
       echo '\nRESTARTING'
-      sudo stop #{@id}
-      sudo start #{@id}
+      sudo stop #{id}
+      sudo start #{id}
       echo '[√] restarted'
     """
 
-  restart: (cb) ->
+  restart: (id, cb) ->
+    if typeof id is 'function'
+      cb = id
+      id = @id
     return @log "nothing to restart" if @noUpstart
     @log "RESTARTING"
-    @runCommand @makeRestartCommand(), cb
+    @runCommand @makeRestartCommand(id), cb
 
-  stop: (cb) ->
+  stop: (id, cb) ->
+    if typeof id is 'function'
+      cb = id
+      id = @id
     return @log "nothing to stop" if @noUpstart
     @log "STOPPING"
-    @runCommand "sudo stop #{@id};", cb
+    @runCommand "sudo stop #{id};", cb
 
-  start: (cb) ->
+  start: (id, cb) ->
+    if typeof id is 'function'
+      cb = id
+      id = @id
     return @log "nothing to start" if @noUpstart
     @log "STARTING"
-    @runCommand "sudo start #{@id};", cb
+    @runCommand "sudo start #{id};", cb
 
   # this will never exit. You have to Command-C it, or stop the spawned process
   serverLogs: (lines, cb) ->
