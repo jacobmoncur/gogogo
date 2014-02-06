@@ -23,6 +23,10 @@ program = require 'commander'
 MainConfig = require "./lib/MainConfig"
 Layer = require "./lib/Layer"
 
+parseTargetAndProcessName = (arg) ->
+  [target, processName] = arg.split ':'
+  {target, processName}
+
 program
   .version(VERSION)
   .option("-l, --local <user>", "deploy locally for bootstrapping")
@@ -37,7 +41,7 @@ program
 
 program
   .command("deploy <name> [branch]")
-  .description("deploys a branch (defaults to origin/master) to named server")
+  .description("deploys a branch (defaults to origin/master) to named target")
   .action (name, branch) ->
     getLayer name, (err, layer) ->
       return finish err if err?
@@ -46,41 +50,45 @@ program
 
       layer.deploy branch, finish
 
-
-program
-  .command("restart <name>")
-  .description("restarts named server")
-  .action (name) ->
-    getLayer name, (err, layer) ->
+runProcessSpecificCommandOnLayer = (command) ->
+  (name) ->
+    {target, processName} = parseTargetAndProcessName name
+    getLayer target, (err, layer) ->
       return finish err if err?
-      layer.restart finish
-
-
-program
-  .command("start <name>")
-  .description("starts named server")
-  .action (name) ->
-    getLayer name, (err, layer) ->
-      return finish err if err?
-      layer.start finish
+      if processName
+        layer[command] processName, finish
+      else
+        layer[command] finish
 
 program
-  .command("stop <name>")
-  .description("stops named server")
-  .action (name) ->
-    getLayer name, (err, layer) ->
-      return finish err if err?
-      layer.stop finish
+  .command("restart <name>[:process]")
+  .description("restarts all processes associated with target. if process is provided, restarts only the named process")
+  .action runProcessSpecificCommandOnLayer('restart')
 
 program
-  .command("logs <name>")
-  .description("Logs #{LOGS_LINES} lines of named servers log files")
+  .command("start <name>[:process]")
+  .description("starts all processes associated with target. if process is provided, starts only the named process")
+  .action runProcessSpecificCommandOnLayer('start')
+
+program
+  .command("stop <name>[:process]")
+  .description("stops all processes associated with name. if process is provided, stops only the named process")
+  .action runProcessSpecificCommandOnLayer('stop')
+
+program
+  .command("logs <name>[:process]")
+  .description("Logs #{LOGS_LINES} lines from target and process. When no process is supplied, defaults to the first process.")
   .option("-l, --lines <num>", "the number of lines to log")
   .action (name) ->
-    getLayer name, (err, layer) ->
+    {target, processName} = parseTargetAndProcessName name
+    getLayer target, (err, layer) ->
       return finish err if err?
       lines = program.lines || LOGS_LINES
-      layer.serverLogs lines, finish
+
+      if processName
+        layer.serverLogs lines, processName, finish
+      else
+        layer.serverLogs lines, finish
 
 program
   .command("history <name>")
@@ -102,7 +110,7 @@ program
 
 program
   .command("list")
-  .description("lists all the servers")
+  .description("lists all deploy targets")
   .action ->
     getConfigRepo (err, repoName, mainConfig) ->
       return finish err if err?
