@@ -117,3 +117,13 @@ sudo start someRepo_mockService;
         cb()
 
       s.start done
+
+  describe '.serverLogs', ->
+    it 'returns the right log command', (done) ->
+
+      logsCommand = 'tail -n 10 -f $HOME/ggg/someRepo_mockService/ggg.log'
+      s.runCommand = (command, cb) ->
+        assert.equal command, logsCommand
+        cb()
+
+      s.serverLogs 10, done
