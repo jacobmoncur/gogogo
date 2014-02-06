@@ -178,11 +178,8 @@ class Service
       upstartFile = "/etc/init/#{commandId}.conf"
       logRotateFile = "/etc/logrotate.d/#{commandId}.conf"
 
-
-      console.log 'processes is', processes
-      console.log 'commandId is', commandId
       upstartScript = makeUpstartScript commandId, serverUser, repoDir, command, logFile
-      logRotateScript = makeLogRotate logRotateFile
+      logRotateScript = makeLogRotate logFile
 
       upstartInstall += '\n' + createSingleUpstartInstall upstartScript, upstartFile,
         logRotateScript, logRotateFile
@@ -202,14 +199,6 @@ class Service
       GIT_WORK_TREE=#{repoDir} git reset --hard \\$newrev || exit 1;
     """
 
-
-  runHookCommand: (hook, hookFile) ->
-    """
-      echo "#{hook}" > #{hookFile}
-      chmox +x #{hookFile}
-    """
-
-
   deploy: (branch, cb) ->
 
     @log " - name: #{@name}"
@@ -227,7 +216,7 @@ class Service
         @log "[√] pushed"
 
         # now install and run
-        installCommand = @makeInstallCommand() + "\n" + @makeRestartCommand()
+        installCommand = @makeInstallCommand() + "\n" + @makeRestartCommands(@processes)
         @runCommand installCommand, (err) =>
           if err? then return cb err
 
@@ -248,44 +237,52 @@ class Service
       echo '[√] installed'
     """
 
-  makeRestartCommand: (id=@id) ->
+  makeRestartCommand: (commandName=@id) ->
     return "" if @noUpstart
     """
       echo '\nRESTARTING'
-      sudo stop #{id}
-      sudo start #{id}
+      sudo stop #{commandName}
+      sudo start #{commandName}
       echo '[√] restarted'
     """
 
-  restart: (id, cb) ->
-    if typeof id is 'function'
-      cb = id
-      id = @id
+  restart: (commandName, cb) ->
+    if typeof commandName is 'function'
+      cb = commandName
+      commandName = @id
     return @log "nothing to restart" if @noUpstart
     @log "RESTARTING"
-    @runCommand @makeRestartCommand(id), cb
+    @runCommand @makeRestartCommand(idForCommand(commandName)), cb
 
-  stop: (id, cb) ->
-    if typeof id is 'function'
-      cb = id
-      id = @id
+  stop: (commandName, cb) ->
+    if typeof commandName is 'function'
+      cb = commandName
+      commandName = @id
     return @log "nothing to stop" if @noUpstart
     @log "STOPPING"
-    @runCommand "sudo stop #{id};", cb
+    @runCommand "sudo stop #{idForCommand(commandName)};", cb
 
-  start: (id, cb) ->
-    if typeof id is 'function'
-      cb = id
-      id = @id
+  start: (commandName, cb) ->
+    if typeof commandName is 'function'
+      cb = commandName
+      commandName = @id
     return @log "nothing to start" if @noUpstart
     @log "STARTING"
-    @runCommand "sudo start #{id};", cb
+    @runCommand "sudo start #{idForCommand(commandName)};", cb
+
+  logFileForCommandName: (commandName) ->
+    commandId = @idForCommand commandName, @id
+    "#{@repoDir}/#{commandName}.ggg.log"
 
   # this will never exit. You have to Command-C it, or stop the spawned process
-  serverLogs: (lines, cb) ->
-    @log "Tailing #{@logFile}... Control-C to exit"
+  serverLogs: (lines, commandName, cb) ->
+    if typeof commandName is 'function'
+      cb = commandName
+      commandName = @id
+    logFile = logFileForCommandName commandName
+    @log "Tailing #{logFile}... Control-C to exit"
     @log "-------------------------------------------------------------"
-    @runCommand "tail -n #{lines} -f #{@logFile}", cb
+    @runCommand "tail -n #{lines} -f #{logFile}", cb
 
   getHistory: (revisions, cb) ->
     @log "Retrieving last #{revisions} deploys, most recent first!"
