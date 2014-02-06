@@ -1,48 +1,8 @@
-
 {spawn} = require 'child_process'
-
-Cron = require "./Cron"
+Cron = require './Cron'
+Process = require './Process'
 
 PREFIX = "ggg"
-
-isSingleStartCommand = (startCommand) ->
-  typeof startCommand is 'string'
-
-createSingleUpstartInstall = (upstart, upstartFile, logRotateCommand, logRotateFile) ->
-  if upstart
-    """
-    echo "#{upstart}" | sudo tee #{upstartFile}
-    echo "#{logRotateCommand}" | sudo tee #{logRotateFile}
-    """
-  else
-    ""
-
-makeUpstartScript = (id, serverUser, repoDir, startCommand, logFile) ->
-  # upstart service
-  # we use 'su root -c' because we need to keep our environment variables
-  # http://serverfault.com/questions/128605/have-upstart-read-environment-from-etc-environment-for-a-service
-  """
-    description '#{id}'
-    start on (filesystem and net-device-up)
-    stop on runlevel [!2345]
-    limit nofile 10000 15000
-    respawn
-    respawn limit 5 5
-    exec su #{serverUser} -c 'cd #{repoDir} && #{startCommand}' >> #{logFile} 2>&1
-  """
-
-
-makeLogRotate = (logFile) ->
-  """
-  #{logFile} {
-    daily
-    copytruncate
-    rotate 7
-    compress
-    notifempty
-    missingok
-  }
-  """
 
 
 makeCreateScript =  (hook, upstartInstall, cronInstallScript, repoDir, hookFile) ->
@@ -67,6 +27,7 @@ makeCreateScript =  (hook, upstartInstall, cronInstallScript, repoDir, hookFile)
     echo "[√] created"
     #{cronInstallScript}
   """
+
 
 class Service
   # we let the host group handle the logging
@@ -99,15 +60,11 @@ class Service
   constructor: (@name, @repoName, @config, @parent, @isLocal = false) ->
     # pre compute all the fields we might need
     @id = @repoName + "_" + @name
-    @processes = @parseStartCommands @config, @id
-
     @repoDir = "$HOME/#{PREFIX}/#{@id}"
     @historyFile = "$HOME/#{PREFIX}/#{@id}-history.txt"
     @serverUser = @config.getUser()
     @hookFile = "#{@repoDir}/.git/hooks/post-receive"
-    #@logFile = "#{@repoDir}/ggg.log"
-    #@upstartFile = "/etc/init/#{@id}.conf"
-    #@logRotateFile = "/etc/logrotate.d/#{@id}.conf"
+
     @noUpstart = !@config.getStart()
 
     if @isLocal
@@ -119,22 +76,18 @@ class Service
     else
       @host = @config.getHost()
       @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
+    @processes = @parseStartCommands @config, @id
 
-  parseStartCommands: (config, defaultName) ->
+  parseStartCommands: (config) ->
     start = config.getStart()
-    # some people have no start
-    return {} unless start
-    if isSingleStartCommand start
-      startCmd = start
-      start = {}
-      start[defaultName] = startCmd
-    start
+    # some processes have no start
+    return [] unless start
+    isSingleStartCommand = typeof start is 'string'
+    if isSingleStartCommand
+      return [new Process {@repoName, @repoDir, target: @name, startCommand: start}]
 
-  idForCommand: (commandName, baseId) ->
-    # for the cases where we only have one command, so the baseId is the same
-    # as the command name
-    return commandName if commandName is baseId
-    "#{baseId}_#{commandName}"
+    Object.keys(start).map (processName) =>
+      new Process {@repoName, @repoDir, processName: processName, target: @name, startCommand: start[processName]}
 
   create: (cb) ->
     @log " - id: #{@id}"
@@ -152,7 +105,7 @@ class Service
       cron = new Cron cronConfig, @id, @repoDir, @serverUser
       cronScript = cron.buildCron()
 
-    upstartInstall = @createUpstartInstall @processes, @serverUser, @repoDir
+    upstartInstall = @createUpstartInstall @processes, @serverUser
 
     createRemoteScript = makeCreateScript hookScript, upstartInstall, cronScript,  @repoDir, @hookFile
 
@@ -160,31 +113,9 @@ class Service
       if err? then return cb err
       cb()
 
-  # return the string to create one or more upstart and logrotate commands
-  # for runProcesses
-  #
-  # @param runProcesses Object - hash of process name to start command
-  # @param serverUser String - username to use to create these files
-  # @param repoDir String - location of the github repo
-  #
-  # @return String a string to be run with exec that will generate the
-  #   upstart and logrotate files
-  createUpstartInstall: (processes, serverUser, repoDir) ->
+  createUpstartInstall: (processes, serverUser) ->
     return '' if @noUpstart
-    upstartInstall = ''
-    for commandName, command of processes
-      commandId = @idForCommand commandName, @id
-      logFile = "#{@repoDir}/#{commandName}.ggg.log"
-      upstartFile = "/etc/init/#{commandId}.conf"
-      logRotateFile = "/etc/logrotate.d/#{commandId}.conf"
-
-      upstartScript = makeUpstartScript commandId, serverUser, repoDir, command, logFile
-      logRotateScript = makeLogRotate logFile
-
-      upstartInstall += '\n' + createSingleUpstartInstall upstartScript, upstartFile,
-        logRotateScript, logRotateFile
-
-    upstartInstall
+    processes.map((p) -> p.makeLogUpstartAndLogRotateFilesCommand(serverUser)).join('\n')
 
   makeHookScript: (historyFile, repoDir) ->
     # http://toroid.org/ams/git-website-howto
@@ -200,7 +131,6 @@ class Service
     """
 
   deploy: (branch, cb) ->
-
     @log " - name: #{@name}"
     @log " - server: #{@host}"
     @log " - branch: #{branch}"
@@ -229,6 +159,9 @@ class Service
             cb()
           setTimeout kill, 2000
 
+  makeRestartCommands: (processes) ->
+    @processes.map((p) -> p.makeRestartCommand()).join('\n')
+
   makeInstallCommand: ->
     """
       echo '\nINSTALLING'
@@ -237,49 +170,52 @@ class Service
       echo '[√] installed'
     """
 
-  makeRestartCommand: (commandName=@id) ->
-    return "" if @noUpstart
-    """
-      echo '\nRESTARTING'
-      sudo stop #{commandName}
-      sudo start #{commandName}
-      echo '[√] restarted'
-    """
+  restart: (processName, cb) ->
+    if typeof processName is 'function'
+      return @runAllCommand 'restart', processName
+    @runCommandForProcess 'restart', processName, cb
 
-  restart: (commandName, cb) ->
-    if typeof commandName is 'function'
-      cb = commandName
-      commandName = @id
-    return @log "nothing to restart" if @noUpstart
-    @log "RESTARTING"
-    @runCommand @makeRestartCommand(idForCommand(commandName)), cb
+  runAllCommand: (command, cb) ->
+    @log "RUNNING #{command.toUpperCase()} for all processes"
+    commandToRun = @processes.map((p) -> p[command]()).join('\n')
+    @runCommand commandToRun, cb
 
-  stop: (commandName, cb) ->
-    if typeof commandName is 'function'
-      cb = commandName
-      commandName = @id
-    return @log "nothing to stop" if @noUpstart
-    @log "STOPPING"
-    @runCommand "sudo stop #{idForCommand(commandName)};", cb
+  runCommandForProcess: (command, processName, cb) ->
+    @log "RUNNING #{command.toUpperCase()} for #{processName}"
+    process = @findProcess processName
+    if not process
+      return cb new Error 'no process for ' + processName + ', can\'t run ' + command
+    @runCommand process[command](), cb
 
-  start: (commandName, cb) ->
-    if typeof commandName is 'function'
-      cb = commandName
-      commandName = @id
-    return @log "nothing to start" if @noUpstart
-    @log "STARTING"
-    @runCommand "sudo start #{idForCommand(commandName)};", cb
+  stop: (processName, cb) ->
+    if typeof processName is 'function'
+      return @runAllCommand 'stop', processName
+    @runCommandForProcess 'stop', processName, cb
 
-  logFileForCommandName: (commandName) ->
-    commandId = @idForCommand commandName, @id
-    "#{@repoDir}/#{commandName}.ggg.log"
+  start: (processName, cb) ->
+    if typeof processName is 'function'
+      return @runAllCommand 'start', processName
+    @runCommandForProcess 'start', processName, cb
+
+  findProcess: (processName) ->
+    @processes.filter((p) -> p.processName is processName)[0]
+
+  logFileForCommandName: (processName) ->
+    "#{@repoDir}/#{processName}.ggg.log"
 
   # this will never exit. You have to Command-C it, or stop the spawned process
-  serverLogs: (lines, commandName, cb) ->
-    if typeof commandName is 'function'
-      cb = commandName
-      commandName = @id
-    logFile = logFileForCommandName commandName
+  serverLogs: (lines, processName, cb) ->
+    process = null
+    if typeof processName is 'function'
+      cb = processName
+      # just find the first one?
+      process = @processes[0]
+    else
+      process = @findProcess processName
+
+    if !process
+      return cb new Error 'Could not find process to log :('
+    logFile = process.logFile()
     @log "Tailing #{logFile}... Control-C to exit"
     @log "-------------------------------------------------------------"
     @runCommand "tail -n #{lines} -f #{logFile}", cb
