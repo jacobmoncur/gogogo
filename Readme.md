@@ -2,47 +2,15 @@ Go Go Go
 ========
 
 Gogogo is a simple command-line tool for easily deploying command-line
-applications. It puts files into place on any server with upstart and gets it
-all configured.
+applications. It assumes you are using upstart, have ssh access, have git
+installed on both your local computer and the server you are deploying to, and
+if you aren't deploying as root that sudo works without a password.
 
-### Goals
-
-1. Easy to setup
-2. Easy to redeploy
-3. Deploy to multiple servers
-4. Deploy different branches to the same server
 
 Installation
 ------------
 
     npm -g install gogogo
-
-Change Log
-----------
-
-* 0.5.0 - Add ability to support running multiple processes in one deploy
-  target
-* 0.4.10 - Add a command to run a command on the server, plus colorized output
-* 0.4.8 - automatically add logrotate files, make upstart work properly on
-  reboot
-* 0.4.3 - added support for local deploys, and sudo for non-root users (see
-  note below)
-* 0.4.0 - Added support for tracking support history, plugins, and a chef
-  plugin
-* 0.3.3 - multi cron support, plus per-layer config
-* 0.3.0 - custom config file, cron support
-* 0.2.6 - git push force
-* 0.2.5 - Server Environment variables are preserved! Deploy monitors the log
-  for a couple seconds.
-* 0.2.0 - gogogo list, logs, start, stop, restart, deploy
-
-Server Requirements
--------------------
-
-1. Upstart (included with ubuntu)
-2. SSH Access
-3. Git installed on both local computer and server
-4. for non-root users, sudo must work without a password
 
 Usage
 -----
@@ -101,22 +69,9 @@ module.exports = {
     ggg deploy test master
 
 
-Limitations
------------
-
-1. Only works on ubuntu (requires upstart to be installed)
-2. You must change the port in either the code or an environment variable to
-   run the same app twice on the same server
-
-Roadmap
--------
-
-* Clean up cron files when removing a cronjob after a deploy
-
-Help
-----
-
 ### Actions
+
+gogogo can do these things:
 
 ```bash
 ggg help
@@ -292,3 +247,43 @@ empty string.
 ### SSH key host checking warning
 SSH is run with host key checking disabled. It's up to you to verify the
 authenticity of your hosts.
+
+
+Change Log
+----------
+
+* 0.5.0 - Add ability to support running multiple processes in one deploy
+  target
+* 0.4.10 - Add a command to run a command on the server, plus colorized output
+* 0.4.8 - automatically add logrotate files, make upstart work properly on
+  reboot
+* 0.4.3 - added support for local deploys, and sudo for non-root users (see
+  note below)
+* 0.4.0 - Added support for tracking support history, plugins, and a chef
+  plugin
+* 0.3.3 - multi cron support, plus per-layer config
+* 0.3.0 - custom config file, cron support
+* 0.2.6 - git push force
+* 0.2.5 - Server Environment variables are preserved! Deploy monitors the log
+  for a couple seconds.
+* 0.2.0 - gogogo list, logs, start, stop, restart, deploy
+
+
+Roadmap
+-------
+
+* Clean up cron files when removing a cronjob after a deploy
+
+
+Contributing
+-----------
+
+Check it out locally and install the dependencies with
+
+```bash
+git clone git@github.com:idottv/gogogo.git
+cd gogogo
+npm install
+```
+
+Make your changes, write tests to cover them, and run tests with `npm test`.
