@@ -86,12 +86,20 @@ class Layer extends EventEmitter
   logOne: curry (lines, service, cb) ->
     service.serverLogs lines, cb
 
+  logOneForProcess: curry (lines, processName, service, cb) ->
+    service.serverLogs lines, processName, cb
+
   historyOne: curry (revisions, service, cb) ->
     service.getHistory revisions, cb
 
-  serverLogs: (lines, cb) ->
-    withLines = @logOne lines
+  serverLogs: (lines, processName, cb) ->
+    if typeof processName is 'function'
+      cb = processName
+      withLines = @logOne lines
+    else
+      withLines = @logOneForProcess lines, processName
     async.forEach @services, withLines, cb
+
 
   commitHistory: (revisions, cb) ->
     withRevisions = @historyOne revisions
@@ -104,20 +112,27 @@ class Layer extends EventEmitter
     async.forEach @services, @runCommandOne(command), cb
 
   # do these ones generically, because no params
-  restart: (cb) ->
-    @serviceAction "restart", cb
+  restart: (processName, cb) ->
+    @serviceAction 'restart', processName, cb
 
-  start: (cb) ->
-    @serviceAction "start", cb
+  start: (processName, cb) ->
+    @serviceAction 'start', processName, cb
 
-  stop: (cb) ->
-    @serviceAction "stop", cb
+  stop: (processName, cb) ->
+    @serviceAction 'stop', processName, cb
 
-  serviceAction: (action, cb) =>
-    actionCurry = @actionOne action
+  serviceAction: (action, processName, cb) =>
+    if typeof processName is 'function'
+      cb = processName
+      actionCurry = @action action
+    else
+      actionCurry = @actionForProcess action, processName
     async.forEach @services, actionCurry, cb
 
-  actionOne: curry (action, service, cb) ->
+  actionForProcess: curry (action, processName, service, cb) ->
+    service[action] processName, cb
+
+  action: curry (action, service, cb) ->
     service[action] cb
 
   log: (parentAddress, msg) ->

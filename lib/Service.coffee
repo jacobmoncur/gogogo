@@ -1,9 +1,33 @@
-
 {spawn} = require 'child_process'
-
-Cron = require "./Cron"
+Cron = require './Cron'
+Process = require './Process'
 
 PREFIX = "ggg"
+
+
+makeCreateScript =  (hook, upstartInstall, cronInstallScript, repoDir, hookFile) ->
+  # denyCurrentBranch ignore allows it to accept pushes without complaining
+  """
+    echo '\nCREATING...'
+    mkdir -p #{repoDir}
+    cd #{repoDir}
+    echo "Locating git"
+    which git
+    if (( $? )); then
+        echo "Could not locate git"
+        exit 1
+    fi
+    git init
+    git config receive.denyCurrentBranch ignore
+
+    #{upstartInstall}
+
+    echo "#{hook}" > #{hookFile}
+    chmod +x #{hookFile}
+    echo "[√] created"
+    #{cronInstallScript}
+  """
+
 
 class Service
   # we let the host group handle the logging
@@ -40,19 +64,30 @@ class Service
     @historyFile = "$HOME/#{PREFIX}/#{@id}-history.txt"
     @serverUser = @config.getUser()
     @hookFile = "#{@repoDir}/.git/hooks/post-receive"
-    @logFile = "#{@repoDir}/ggg.log"
-    @upstartFile = "/etc/init/#{@id}.conf"
-    @logRotateFile = "/etc/logrotate.d/#{@id}.conf"
-    @noUpstart = true if not @config.getStart()
+
+    @noUpstart = !@config.getStart()
 
     if @isLocal
       @host = "localhost"
-      # for some reason, things aren't preserved, so manually make sure this is set!
+      # for some reason, things aren't preserved, so manually make sure this is
+      # set!
       @repoDir = "#{process.env.HOME}/#{PREFIX}/#{@id}"
       @repoUrl = @repoDir
     else
       @host = @config.getHost()
       @repoUrl = "ssh://#{@host}/~/#{PREFIX}/#{@id}"
+    @processes = @parseStartCommands @config, @id
+
+  parseStartCommands: (config) ->
+    start = config.getStart()
+    # some processes have no start
+    return [] unless start
+    isSingleStartCommand = typeof start is 'string'
+    if isSingleStartCommand
+      return [new Process {@repoName, @repoDir, target: @name, startCommand: start}]
+
+    Object.keys(start).map (processName) =>
+      new Process {@repoName, @repoDir, processName: processName, target: @name, startCommand: start[processName]}
 
   create: (cb) ->
     @log " - id: #{@id}"
@@ -61,11 +96,7 @@ class Service
     @log " - start: #{@config.getStart()}"
     @log " - install: #{@config.getInstall()}"
 
-    upstartScript = ""
-    if not @noUpstart
-      upstartScript = @makeUpstartScript()
-
-    hookScript = @makeHookScript()
+    hookScript = @makeHookScript @historyFile, @repoDir
     # CRON SUPPORT
     cronConfig = @config.getCron()
     cronScript = ''
@@ -74,83 +105,32 @@ class Service
       cron = new Cron cronConfig, @id, @repoDir, @serverUser
       cronScript = cron.buildCron()
 
-    createRemoteScript = @makeCreateScript upstartScript, hookScript, cronScript
+    upstartInstall = @createUpstartInstall @processes, @serverUser
+
+    createRemoteScript = makeCreateScript hookScript, upstartInstall, cronScript,  @repoDir, @hookFile
 
     @runCommand createRemoteScript, (err) ->
       if err? then return cb err
       cb()
 
-  makeUpstartScript: ->
-    # upstart service
-    # we use 'su root -c' because we need to keep our environment variables
-    # http://serverfault.com/questions/128605/have-upstart-read-environment-from-etc-environment-for-a-service
-    """
-      description '#{@id}'
-      start on (filesystem and net-device-up)
-      stop on runlevel [!2345]
-      limit nofile 10000 15000
-      respawn
-      respawn limit 5 5
-      exec su #{@serverUser} -c 'cd #{@repoDir} && #{@config.getStart()}' >> #{@logFile} 2>&1
-    """
+  createUpstartInstall: (processes, serverUser) ->
+    return '' if @noUpstart
+    processes.map((p) -> p.makeLogUpstartAndLogRotateFilesCommand(serverUser)).join('\n')
 
-  makeLogRotate: ->
-    """
-    #{@logFile} {
-      daily
-      copytruncate
-      rotate 7
-      compress
-      notifempty
-      missingok
-    }
-    """
-
-  makeHookScript: ->
+  makeHookScript: (historyFile, repoDir) ->
     # http://toroid.org/ams/git-website-howto
-    # this hook ensures that we check out the right revision and also keep track of what we have deploy
+    # this hook ensures that we check out the right revision and also keep
+    # track of what we have deploy
     """
       read oldrev newrev refname
       echo 'GOGOGO checking out:'
       echo \\$newrev
-      echo \\`date\\` - \\$newrev >> #{@historyFile}
-      cd #{@repoDir}/.git
-      GIT_WORK_TREE=#{@repoDir} git reset --hard \\$newrev || exit 1;
-    """
-
-  makeCreateScript: (upstart, hook, cronInstallScript) ->
-    # command
-    # denyCurrentBranch ignore allows it to accept pushes without complaining
-    upstartInstall = ""
-    if upstart
-      upstartInstall = """
-      echo "#{upstart}" | sudo tee #{@upstartFile}
-      echo "#{@makeLogRotate()}" | sudo tee #{@logRotateFile}
-      """
-
-    """
-      echo '\nCREATING...'
-      mkdir -p #{@repoDir}
-      cd #{@repoDir}
-      echo "Locating git"
-      which git
-      if (( $? )); then
-          echo "Could not locate git"
-          exit 1
-      fi
-      git init
-      git config receive.denyCurrentBranch ignore
-
-      #{upstartInstall}
-
-      echo "#{hook}" > #{@hookFile}
-      chmod +x #{@hookFile}
-      echo "[√] created"
-      #{cronInstallScript}
+      echo \\`date\\` - \\$newrev >> #{historyFile}
+      cd #{repoDir}/.git
+      GIT_WORK_TREE=#{repoDir} git reset --hard \\$newrev || exit 1;
     """
 
   deploy: (branch, cb) ->
-
     @log " - name: #{@name}"
     @log " - server: #{@host}"
     @log " - branch: #{branch}"
@@ -166,7 +146,7 @@ class Service
         @log "[√] pushed"
 
         # now install and run
-        installCommand = @makeInstallCommand() + "\n" + @makeRestartCommand()
+        installCommand = @makeInstallCommand() + "\n" + @makeRestartCommands(@processes)
         @runCommand installCommand, (err) =>
           if err? then return cb err
 
@@ -179,6 +159,9 @@ class Service
             cb()
           setTimeout kill, 2000
 
+  makeRestartCommands: (processes) ->
+    @processes.map((p) -> p.makeRestartCommand()).join('\n')
+
   makeInstallCommand: ->
     """
       echo '\nINSTALLING'
@@ -187,35 +170,55 @@ class Service
       echo '[√] installed'
     """
 
-  makeRestartCommand: ->
-    return "" if @noUpstart
-    """
-      echo '\nRESTARTING'
-      sudo stop #{@id}
-      sudo start #{@id}
-      echo '[√] restarted'
-    """
+  restart: (processName, cb) ->
+    if typeof processName is 'function'
+      return @runAllCommand 'restart', processName
+    @runCommandForProcess 'restart', processName, cb
 
-  restart: (cb) ->
-    return @log "nothing to restart" if @noUpstart
-    @log "RESTARTING"
-    @runCommand @makeRestartCommand(), cb
+  runAllCommand: (command, cb) ->
+    @log "RUNNING #{command.toUpperCase()} for all processes"
+    commandToRun = @processes.map((p) -> p[command]()).join('\n')
+    @runCommand commandToRun, cb
 
-  stop: (cb) ->
-    return @log "nothing to stop" if @noUpstart
-    @log "STOPPING"
-    @runCommand "sudo stop #{@id};", cb
+  runCommandForProcess: (command, processName, cb) ->
+    @log "RUNNING #{command.toUpperCase()} for #{processName}"
+    process = @findProcess processName
+    if not process
+      return cb new Error 'no process for ' + processName + ', can\'t run ' + command
+    @runCommand process[command](), cb
 
-  start: (cb) ->
-    return @log "nothing to start" if @noUpstart
-    @log "STARTING"
-    @runCommand "sudo start #{@id};", cb
+  stop: (processName, cb) ->
+    if typeof processName is 'function'
+      return @runAllCommand 'stop', processName
+    @runCommandForProcess 'stop', processName, cb
+
+  start: (processName, cb) ->
+    if typeof processName is 'function'
+      return @runAllCommand 'start', processName
+    @runCommandForProcess 'start', processName, cb
+
+  findProcess: (processName) ->
+    @processes.filter((p) -> p.processName is processName)[0]
+
+  logFileForCommandName: (processName) ->
+    "#{@repoDir}/#{processName}.ggg.log"
 
   # this will never exit. You have to Command-C it, or stop the spawned process
-  serverLogs: (lines, cb) ->
-    @log "Tailing #{@logFile}... Control-C to exit"
+  serverLogs: (lines, processName, cb) ->
+    process = null
+    if typeof processName is 'function'
+      cb = processName
+      # just find the first one?
+      process = @processes[0]
+    else
+      process = @findProcess processName
+
+    if !process
+      return cb new Error 'Could not find process to log :('
+    logFile = process.logFile()
+    @log "Tailing #{logFile}... Control-C to exit"
     @log "-------------------------------------------------------------"
-    @runCommand "tail -n #{lines} -f #{@logFile}", cb
+    @runCommand "tail -n #{lines} -f #{logFile}", cb
 
   getHistory: (revisions, cb) ->
     @log "Retrieving last #{revisions} deploys, most recent first!"

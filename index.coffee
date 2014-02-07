@@ -23,6 +23,10 @@ program = require 'commander'
 MainConfig = require "./lib/MainConfig"
 Layer = require "./lib/Layer"
 
+parseTargetAndProcessName = (arg) ->
+  [target, processName] = arg.split ':'
+  {target, processName}
+
 program
   .version(VERSION)
   .option("-l, --local <user>", "deploy locally for bootstrapping")
@@ -37,7 +41,7 @@ program
 
 program
   .command("deploy <name> [branch]")
-  .description("deploys a branch (defaults to origin/master) to named server")
+  .description("deploys a branch (defaults to origin/master) to named target")
   .action (name, branch) ->
     getLayer name, (err, layer) ->
       return finish err if err?
@@ -46,41 +50,45 @@ program
 
       layer.deploy branch, finish
 
-
-program
-  .command("restart <name>")
-  .description("restarts named server")
-  .action (name) ->
-    getLayer name, (err, layer) ->
+runProcessSpecificCommandOnLayer = (command) ->
+  (name) ->
+    {target, processName} = parseTargetAndProcessName name
+    getLayer target, (err, layer) ->
       return finish err if err?
-      layer.restart finish
-
-
-program
-  .command("start <name>")
-  .description("starts named server")
-  .action (name) ->
-    getLayer name, (err, layer) ->
-      return finish err if err?
-      layer.start finish
+      if processName
+        layer[command] processName, finish
+      else
+        layer[command] finish
 
 program
-  .command("stop <name>")
-  .description("stops named server")
-  .action (name) ->
-    getLayer name, (err, layer) ->
-      return finish err if err?
-      layer.stop finish
+  .command("restart <name:process>")
+  .description("restarts all processes associated with target.\nIf process is provided, restarts only the named process.\n`ggg restart prod` would restart all processes under the prod target\n`ggg restart prod:web` would restart only the `web` process in the `prod` target.")
+  .action runProcessSpecificCommandOnLayer('restart')
 
 program
-  .command("logs <name>")
-  .description("Logs #{LOGS_LINES} lines of named servers log files")
+  .command("start <name:process>")
+  .description("starts all processes associated with target. if process is provided, starts only the named process")
+  .action runProcessSpecificCommandOnLayer('start')
+
+program
+  .command("stop <name:process>")
+  .description("stops all processes associated with name. if process is provided, stops only the named process")
+  .action runProcessSpecificCommandOnLayer('stop')
+
+program
+  .command("logs <name:process>")
+  .description("Logs #{LOGS_LINES} lines from target and process. When no process is supplied, defaults to the first process.")
   .option("-l, --lines <num>", "the number of lines to log")
   .action (name) ->
-    getLayer name, (err, layer) ->
+    {target, processName} = parseTargetAndProcessName name
+    getLayer target, (err, layer) ->
       return finish err if err?
       lines = program.lines || LOGS_LINES
-      layer.serverLogs lines, finish
+
+      if processName
+        layer.serverLogs lines, processName, finish
+      else
+        layer.serverLogs lines, finish
 
 program
   .command("history <name>")
@@ -102,7 +110,7 @@ program
 
 program
   .command("list")
-  .description("lists all the servers")
+  .description("lists all deploy targets")
   .action ->
     getConfigRepo (err, repoName, mainConfig) ->
       return finish err if err?
@@ -136,7 +144,15 @@ init = (cb) ->
     module.exports = {
 
       // services
+      // can either be a string or an object with mutiple processes to start up
       start: "node app.js",
+      /* or
+      start: {
+        web: 'node app.js',
+        worker 'node worker.js',
+        montior: 'node monitor.js'
+      },
+      */
 
       // install
       install: "npm install",
@@ -192,7 +208,10 @@ getConfigRepo = (cb) ->
   reponame process.cwd(), (err, repoName) ->
     return cb err if err?
     MainConfig.loadFromFile mainConfigPath(), (err, mainConfig) ->
-      if err then return cb new Error "Bad gogogo config file, ggg.js. Run 'gogogo init' to create one. Err=#{err.message}"
+      if err
+        errString = "Bad gogogo config file, ggg.js. Run 'gogogo init' to" +
+        " create one. Err=#{err.message}"
+        return cb new Error errString
 
       cb null, repoName, mainConfig
 
@@ -202,7 +221,7 @@ getLayer = (name, cb) ->
     return cb err if err?
 
     layerConfig = mainConfig.getLayerByName name
-    if !layerConfig then return cb new Error("Invalid Layer Name: #{name}")
+    if !layerConfig then return cb new Error("Invalid layer Name: #{name}")
 
     if program.noPlugin
       layerConfig.plugins = null
