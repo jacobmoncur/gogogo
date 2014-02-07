@@ -2,9 +2,15 @@ Go Go Go
 ========
 
 Gogogo is a simple command-line tool for easily deploying command-line
-applications. It assumes you are using upstart, have ssh access, have git
-installed on both your local computer and the server you are deploying to, and
-if you aren't deploying as root that sudo works without a password.
+applications. It deploys git branches to named targets.
+
+Assumptions
+-----------
+
+0. Your project uses git
+0. You are using ubuntu, or something else with upstart
+0. Git is installed locally and on your target machines
+0. If you aren't deploying as root, you can use sudo without a password
 
 
 Installation
@@ -17,9 +23,8 @@ Usage
 
 In your local repo
 
-1. `ggg init`
-
-2. edit ggg.js:
+1. Run `ggg init` to generate a default ggg.js file. It looks something like
+   this by default:
 
 ``` JavaScript
 module.exports = {
@@ -48,25 +53,21 @@ module.exports = {
     staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"],
     prod: {
       hosts: ["deploy@mycompany.com", "deploy@backup.mycompany.com"],
+      // override top-level cron specified above
       cron: {
         someTask: {time: "0 3 * * *", command: "node sometask.js"},
         anotherTask: {time: "0 3 * * *", command: "node secondTask.js"}
       },
+      // override top-level start specified above
       start: "prodstart app.js"
     }
   }
 }
 ```
 
-3. ggg deploy dev master
+2. edit ggg.js to match your deploy targets.
 
-### Redeploy
-
-    # change some stuff and commit
-    ...
-
-    # deploy again
-    ggg deploy test master
+3. `ggg deploy dev master` to deploy the local master branch to the dev target.
 
 
 ### Actions
@@ -87,6 +88,59 @@ ggg command <target> <command> - run a command on the server in base directory
 ```
 
 gogogo is aliased to ggg for SWEET EFFICIENCY
+
+### ggg.js files
+
+The `ggg.js` file is configuration for gogogog. It tells gogogo where to
+deploy and what to run when deploying. Since gogogo is just a node program,
+ggg.js is just a node module that exports a single configuration object.
+
+This object can have the following fields:
+
+* `install`: command to be run after each deploy. Use this to install any
+   dependencies your program needs.
+* `start`: command used to start up your app. Run every time your app starts
+   or restarts.
+* `cron`: an object containing cron jobs to set up. The cron commands will be
+  run relative to your program's directory
+* `servers`: an object containing targets to deploy to. The keys are the target
+  names you will use in running gogogo commands. If the values are strings,
+  they are assumed to be single host names to deploy to. Arrays of strings are
+  assumed to be a group of hosts to deploy to. An object is assumed to be
+  configuration for a single target.
+
+Lets talk more about the target configuration object. By default each target
+uses the top-level `install`, `start` and `cron` properties. If you have a
+ggg.js file that looks like this, then your `dev` target will use
+`'node index.js'` as the start command and `'npm install'` as the install command.
+
+```JavaScript
+module.exports = {
+  start: 'node index.js',
+  install: 'npm install',
+  servers: {
+    dev: 'foo@example.com'
+  }
+}
+```
+
+Let's say you add a prod target, and you need to run a build step as part of
+your installation. You can use an object instead of a hostname string, and
+specify your own prod-specific install command like so:
+
+```JavaScript
+module.exports = {
+  start: 'node index.js',
+  install: 'npm install',
+  servers: {
+    dev: 'foo@example.com',
+    prod: {
+      hosts: 'foo@prod.example.com',
+      install: 'npm install && ./node_modules/.bin/grunt build'
+    }
+  }
+}
+```
 
 ### Cron Support
 
