@@ -121,14 +121,14 @@ Help
 ```bash
 ggg help
 ggg init - creates a ggg.js config file for you
-ggg deploy <targetName> <branch> — deploys branch to named server
-ggg restart <targetName>
-ggg start <targetName>
-ggg stop <targetName>
-ggg logs <targetName> — tail remote log
+ggg deploy <target> <branch> — deploys branch to named server
+ggg restart <target:process>
+ggg start <target:process>
+ggg stop <target:process>
+ggg logs <target:process> — tail remote log
 ggg list — show available names
-ggg history <targetName> - shows a history of deployed commits
-ggg command <targetName> <command> - run a command on the server in base directory
+ggg history <target> - shows a history of deployed commits
+ggg command <target> <command> - run a command on the server in base directory
 ```
 
 gogogo is aliased to ggg for SWEET EFFICIENCY
@@ -165,11 +165,11 @@ change or remove cronjobs, so you'll have to do that yourself now.
 ### Multiple processes under one deploy target
 
 gogogo supports running multiple processes under one deploy target. Let's look
-at an example to see how it works.
+at an example.
 
 If the value of the `start` property is a string, your target will only have
-one process associated with it. You can start, stop, restart and log it by
-running `ggg <start|stop|logs|restart> <target>`.
+one process. You can start, stop, restart and log it by running
+`ggg <start|stop|logs|restart> <target>`.
 
 
 ```JavaScript
@@ -179,11 +179,9 @@ module.exports = {
 ```
 
 If the value of the `start` property is an object, your target will have
-multiple processes associated with it. Let's look at an example ggg.js file.
+multiple processes associated with it. Check out an example ggg.js file.
 
 ```JavaScript
-
-
 module.exports = {
   servers: {
     prod: {
@@ -199,10 +197,10 @@ module.exports = {
 }
 ```
 
-Here we define one target, `prod`, with three processes under it. Each process
-gets its own upstart script, log file, and logrotate file. Deploying will
-restart all trhee processes at once. If you run `ggg prod <stop|restart|start>`
-gogogo will stop|restart|start all three processes at once.
+Here we define one target, `prod`, with three processes. Each process gets its
+own upstart script, log file, and logrotate file. Deploying will restart all
+three processes at once. If you run `ggg prod <stop|restart|start>` gogogo will
+stop|restart|start all three processes at once.
 
 You can start, stop, restart or log individual processes by running
 `ggg <command> prod:<processName>`. If you wanted to restart the web process,
@@ -226,7 +224,7 @@ replace the field with.
 
 Currently, there is one bundled plugin, chefHosts, which integrates with
 opscode's knife to retrieve a list of servers to deploy to. An example of using
-a plugin is show below.
+a plugin is shown below.
 
 ``` JavaScript
 plugins: {

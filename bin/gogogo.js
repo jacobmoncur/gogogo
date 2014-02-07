@@ -3,7 +3,6 @@
 var fs = require('fs')
 var path = require('path')
 var root = path.join(path.dirname(fs.realpathSync(__filename)), '../')
-console.log('root is', root)
 
 var gogogo = require(path.join(root, 'index'))
 
