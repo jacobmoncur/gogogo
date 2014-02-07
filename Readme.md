@@ -55,9 +55,16 @@ In your local repo
 
 ``` JavaScript
 module.exports = {
-
   // services
+  // can either be a string or an object with mutiple processes to start up
   start: "node app.js",
+  /* or
+  start: {
+    web: 'node app.js',
+    worker 'node worker.js',
+    montior: 'node monitor.js'
+  },
+  */
 
   // install
   install: "npm install",
@@ -67,7 +74,7 @@ module.exports = {
     someTask: { time: "0 3 * * *", command: "node sometask.js"},
   },
 
-  // servers to deploy to
+  // targets to deploy to
   servers: {
     dev: "deploy@dev.mycompany.com",
     staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"],
@@ -93,39 +100,6 @@ module.exports = {
     # deploy again
     ggg deploy test master
 
-### Plugins
-
-As of 0.4.0, gogogo supports plugins to help your deploys be more dynamic.
-
-gogogo plugins override a single deploy parameter (such as hosts) and are a
-simple file that exports a single function with the following signature:
-
-``` JavaScript
-module.exports = function(opts, cb) {
-  cb(err, overrides)
-}
-```
-where opts is a hash of user definied options
-
-
-Currently, there is one bundled plugin, chefHosts, which integrates with
-opscode's knife to retrieve a list of servers to deploy to. An example of using
-a plugin is show below.
-
-``` JavaScript
-plugins: {
-  "chefHosts" : {
-    overrides: "hosts", // required field! defines the property to override
-    opts: {
-      role: "myapp",
-      env: "production"
-    }
-  },
-  "./plugins/myPlugin" { // user plugins are supported, relative to cwd
-    overrides: "install"
-  }
-},
-```
 
 Limitations
 -----------
@@ -161,31 +135,113 @@ gogogo is aliased to ggg for SWEET EFFICIENCY
 
 ### Cron Support
 
-gogogo currently supports cron actions.
+gogogo can create cron jobs for you on deploy.
 
 ``` JavaScript
 module.exports = {
-    cron: {
-     cronName: {time: "0 3 * * *" command: " node something.js"}
-    }
+  cron: {
+    cronName: {time: "0 3 * * *" command: " node something.js"}
+  }
 }
 ```
 
 It will create a script in /etc/cron.d/, set the permissions correctly, and
-redirect log output to `cron_cronName.log`. You can have multiple cron commands as well.
+redirect log output to `cron_cronName.log`.
 
-### Environment variables
+You can have multiple cron commands by having multiple keys in the cron object:
 
-If they are the same no matter which server is deployed, put them in your start
-script.
+```JavaScript
+module.exports = {
+  cron: {
+    cronName: {time: "0 3 * * *" command: "node something.js"},
+    anotherCron: {time: "0 1 * * *" command: "node somethingElse.js"}
+  }
+}
+```
 
-    "start":"DB_HOST=localhost node app.js"
+gogogo isn't smart enough yet to remove old cron files it created when you
+change or remove cronjobs, so you'll have to do that yourself now.
 
-If they refer to something about the server you are on, put them in
-`/etc/environment`.
+### Multiple processes under one deploy target
 
-    # /etc/environment
-    NODE_ENV="production"
+gogogo supports running multiple processes under one deploy target. Let's look
+at an example to see how it works.
+
+If the value of the `start` property is a string, your target will only have
+one process associated with it. You can start, stop, restart and log it by
+running `ggg <start|stop|logs|restart> <target>`.
+
+
+```JavaScript
+module.exports = {
+  start: 'echo "foo"'
+}
+```
+
+If the value of the `start` property is an object, your target will have
+multiple processes associated with it. Let's look at an example ggg.js file.
+
+```JavaScript
+
+
+module.exports = {
+  servers: {
+    prod: {
+      hosts: ["deploy@mycompany.com", "deploy@backup.mycompany.com"],
+      install: "npm install",
+      start: {
+        web: 'echo "starting web"',
+        worker: 'echo "starting worker"',
+        monitor: 'echo "starting monitor"'
+      }
+    }
+  }
+}
+```
+
+Here we define one target, `prod`, with three processes under it. Each process
+gets its own upstart script, log file, and logrotate file. Deploying will
+restart all trhee processes at once. If you run `ggg prod <stop|restart|start>`
+gogogo will stop|restart|start all three processes at once.
+
+You can start, stop, restart or log individual processes by running
+`ggg <command> prod:<processName>`. If you wanted to restart the web process,
+you would run `ggg restart prod:web`
+
+### Plugins
+
+Plugins allow you to manipulate fields in the ggg.js file at runtime.
+
+gogogo plugins override a single deploy parameter (such as hosts) and are a
+simple file that exports a single function with the following signature:
+
+``` JavaScript
+module.exports = function(opts, cb) {
+  cb(err, overrides)
+}
+```
+where opts is a hash of user definied options, and overrides is the value to
+replace the field with.
+
+
+Currently, there is one bundled plugin, chefHosts, which integrates with
+opscode's knife to retrieve a list of servers to deploy to. An example of using
+a plugin is show below.
+
+``` JavaScript
+plugins: {
+  "chefHosts" : {
+    overrides: "hosts", // required field! defines the property to override
+    opts: {
+      role: "myapp",
+      env: "production"
+    }
+  },
+  "./plugins/myPlugin" { // user plugins are supported, relative to cwd
+    overrides: "install"
+  }
+},
+```
 
 ### Multiple servers
 
@@ -213,13 +269,13 @@ multiple versions of an app running at the same time, call `ggg create`
 with different names and the same server.
 
 ``` JavaScript
-    // ggg.js
-    module.exports = {
-        servers: {
-            dev: "deploy@dev.mycompany.com",
-            featurex: "deploy@dev.mycompany.com"
-        }
+// ggg.js
+module.exports = {
+    servers: {
+        dev: "deploy@dev.mycompany.com",
+        featurex: "deploy@dev.mycompany.com"
     }
+}
 ```
 
 Then deploy to them separately
@@ -230,22 +286,11 @@ Then deploy to them separately
 Note that for web servers you'll want to change the port in your featurex
 branch or it will conflict.
 
-### Reinstall / Upgrade
-
-To reinstall, run `npm install -g gogogo` again, then redo the create step in
-your repository.
-
-### Gitignore
-
-Commit ggg.js to your repo, so anyone using the repo can deploy as long as they
-have ssh access to the server.
-
 ### Deploying without start
 If you want to deploy code without having to run anything (such as machines
-that only do cron) just define no start command (or override it with an empty
-string)
+that only do cron) just don't define a start command or override it with an
+empty string.
 
-### IMPORTANT NOTES!
-
-SSH is run with host key checking disabled! Its up to you to verify the
-authenticity of your hosts!
+### SSH key host checking warning
+SSH is run with host key checking disabled. It's up to you to verify the
+authenticity of your hosts.

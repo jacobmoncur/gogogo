@@ -61,22 +61,22 @@ runProcessSpecificCommandOnLayer = (command) ->
         layer[command] finish
 
 program
-  .command("restart <name>[:process]")
-  .description("restarts all processes associated with target. if process is provided, restarts only the named process")
+  .command("restart <name:process>")
+  .description("restarts all processes associated with target.\nIf process is provided, restarts only the named process.\n`ggg restart prod` would restart all processes under the prod target\n`ggg restart prod:web` would restart only the `web` process in the `prod` target.")
   .action runProcessSpecificCommandOnLayer('restart')
 
 program
-  .command("start <name>[:process]")
+  .command("start <name:process>")
   .description("starts all processes associated with target. if process is provided, starts only the named process")
   .action runProcessSpecificCommandOnLayer('start')
 
 program
-  .command("stop <name>[:process]")
+  .command("stop <name:process>")
   .description("stops all processes associated with name. if process is provided, stops only the named process")
   .action runProcessSpecificCommandOnLayer('stop')
 
 program
-  .command("logs <name>[:process]")
+  .command("logs <name:process>")
   .description("Logs #{LOGS_LINES} lines from target and process. When no process is supplied, defaults to the first process.")
   .option("-l, --lines <num>", "the number of lines to log")
   .action (name) ->
@@ -144,7 +144,15 @@ init = (cb) ->
     module.exports = {
 
       // services
+      // can either be a string or an object with mutiple processes to start up
       start: "node app.js",
+      /* or
+      start: {
+        web: 'node app.js',
+        worker 'node worker.js',
+        montior: 'node monitor.js'
+      },
+      */
 
       // install
       install: "npm install",
