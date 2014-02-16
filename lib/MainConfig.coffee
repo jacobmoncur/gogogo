@@ -1,4 +1,4 @@
-path = require "path"
+path = require 'path'
 
 # read a config file
 readConfig = (f, cb) ->
@@ -8,35 +8,49 @@ readConfig = (f, cb) ->
     return cb e
   cb null, m
 
+# TODO: this is hacky, duplicating logic in the ServerConfig thing. Do
+# we even need that?
+formatTargetForListing = (targetName, target, globalStart) ->
+  # target.start can be an empty string, so we only use global one if
+  # target.start is undefined
+  target.start = globalStart unless target.start?
+  return targetName if typeof target.start is 'string'
+
+  Object.keys(target.start).map((s) -> "#{targetName}:#{s}").join('\n')
+
 class MainConfig
 
-  constructor: ({@start, @install, @plugins, @cron, servers}) ->
+  constructor: ({@start, @install, @plugins, @cron, targets, servers}) ->
+    # allow old ggg.js syntax where 'targets' used to be called 'servers'
+    if !targets
+      targets = servers
+
     # normalize to an array for multi server deploys
-    @layers = []
-    for name, layer of servers
-      @layers[name] = @normalizeLayer layer
+    @targets = {}
+    for name, target of targets
+      @targets[name] = @normalizeTarget target
 
-  getLayerByName: (name) ->
-    @layers[name] || throw new Error "Cannot find server named #{name}. Check your config file"
+  getTargetByName: (name) ->
+    @targets[name] || throw new Error "Cannot find server named #{name}. Check your config file"
 
-  getStart: ->
-    @start
+  getStart: -> @start
 
-  getInstall: ->
-    @install
+  getInstall: -> @install
 
-  getPlugins: ->
-    @plugins
+  getPlugins: -> @plugins
 
-  disablePlugins: ->
-    @plugins = null
+  disablePlugins: -> @plugins = null
 
-  getLayerNames: ->
-    Object.keys @layers
+  getTargetNames: -> Object.keys @targets
+
+  # return a string describing the targets and processes
+  listTargetsAndProcesses: ->
+    Object.keys(@targets).map (targetName) =>
+      formatTargetForListing targetName, @targets[targetName], @start
+    .join('\n')
 
   #returns false if not defined
-  getCron: ->
-    if @cron? then @normalizeCron @cron else false
+  getCron: -> if @cron? then @normalizeCron @cron else false
 
   normalizeCron: (cron) ->
     # support the old syntax
@@ -54,7 +68,7 @@ class MainConfig
 
     return cron
 
-  normalizeLayer: (config) ->
+  normalizeTarget: (config) ->
     if typeof config == "string"
       config = {
         hosts: [config]

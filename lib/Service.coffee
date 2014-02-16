@@ -4,7 +4,6 @@ Process = require './Process'
 
 PREFIX = "ggg"
 
-
 makeCreateScript =  (hook, upstartInstall, cronInstallScript, repoDir, hookFile) ->
   # denyCurrentBranch ignore allows it to accept pushes without complaining
   """
@@ -29,6 +28,11 @@ makeCreateScript =  (hook, upstartInstall, cronInstallScript, repoDir, hookFile)
   """
 
 
+###
+# A Service object represents one deploy on one physical machine. You deploy
+# to a Target, but the Target creates one Service per machine to manage
+# actually putting your code on the machine.
+###
 class Service
   # we let the host group handle the logging
   log: (msg) ->

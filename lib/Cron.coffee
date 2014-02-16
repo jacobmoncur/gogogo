@@ -1,7 +1,7 @@
-
 class Cron
 
-  constructor: (cronConfig, @id, @repoDir, @serverUser, @logRotateDir = "/etc/logrotate.d", @cronDir = "/etc/cron.d") ->
+  constructor: (cronConfig, @id, @repoDir, @serverUser,
+  @logRotateDir = "/etc/logrotate.d", @cronDir = "/etc/cron.d") ->
     @cronJobs = []
 
     for name, cf of cronConfig
@@ -15,7 +15,7 @@ class Cron
 
   validate: (cron) ->
     if not cron.name or not cron.time or not cron.command
-      throw new Error "missing a required parameter for cron, try again"
+      throw new Error 'cron must have .name, .time and .command properties but doesn\'t'
     return cron
 
   makeCronScript: (cron) ->
@@ -50,10 +50,6 @@ class Cron
     """
 
   buildCron: ->
-    res = ''
-    for cj in @cronJobs
-      res += @makeScript cj
-      res += "\n"
-    return res
+    @cronJobs.map(@makeScript.bind(@)).join('\n')
 
 module.exports = Cron

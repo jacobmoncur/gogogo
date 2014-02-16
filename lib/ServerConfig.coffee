@@ -1,9 +1,8 @@
-
-
-class Server
+# wrap config object to do a bit of logic for special cases and such
+class ServerConfig
   constructor: (@name, @host, config, mainConfig) ->
     # if they override with an empty string, we want to use it, otherwise, do normal logic
-    if typeof config.start == "string" and not config.start
+    if typeof config.start == 'string' and not config.start
       @start = null
     else
       @start = config.start || mainConfig.getStart()
@@ -14,7 +13,7 @@ class Server
 
   getStart: ->
     if not @start
-      console.log "no start specified, start, stop and restart commands disabled!"
+      console.log 'no start specified, start, stop and restart commands disabled!'
       return
     else
       @start
@@ -28,4 +27,4 @@ class Server
 
   getHost: -> @host
 
-module.exports = Server
+module.exports = ServerConfig

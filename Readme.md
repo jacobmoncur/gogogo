@@ -48,7 +48,7 @@ module.exports = {
   },
 
   // targets to deploy to
-  servers: {
+  targets: {
     dev: "deploy@dev.mycompany.com",
     staging: ["deploy@staging.mycompany.com", "deploy@staging2.mycompany.com"],
     prod: {
@@ -103,11 +103,12 @@ This object can have the following fields:
    or restarts.
 * `cron`: an object containing cron jobs to set up. The cron commands will be
   run relative to your program's directory
-* `servers`: an object containing targets to deploy to. The keys are the target
+* `targets`: an object containing targets to deploy to. The keys are the target
   names you will use in running gogogo commands. If the values are strings,
   they are assumed to be single host names to deploy to. Arrays of strings are
   assumed to be a group of hosts to deploy to. An object is assumed to be
-  configuration for a single target.
+  configuration for a single target. This can also be called 'servers' for
+  backwards-compatibility.
 
 Lets talk more about the target configuration object. By default each target
 uses the top-level `install`, `start` and `cron` properties. If you have a
@@ -306,6 +307,7 @@ authenticity of your hosts.
 Change Log
 ----------
 
+* 0.5.1 - `ggg list` now lists all processes as well as targets
 * 0.5.0 - Add ability to support running multiple processes in one deploy
   target
 * 0.4.10 - Add a command to run a command on the server, plus colorized output

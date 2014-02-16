@@ -1,28 +1,27 @@
-
-path = require "path"
-{EventEmitter} = require "events"
-Service = require "./Service"
-Server = require "./Server"
-async = require "async"
-{curry} = require "fjs"
-clc = require "cli-color"
+path = require 'path'
+{EventEmitter} = require 'events'
+Service = require './Service'
+ServerConfig = require './ServerConfig'
+async = require 'async'
+{curry} = require 'fjs'
+clc = require 'cli-color'
 
 COLORS = [
-  "white",
-  "red",
-  "green",
-  "yellow",
-  "blue",
-  "magenta",
-  "cyan"
+  'white',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan'
 ]
-# Represnts a layer for deployment
+# Represnts a target for deployment
 
-class Layer extends EventEmitter
+class Target extends EventEmitter
 
-  constructor: (@name, layer, @repoName, mainConfig, isLocal) ->
-    @runPlugins layer, mainConfig, (err) =>
-      return @emit "error", err if err?
+  constructor: (@name, target, @repoName, mainConfig, isLocal) ->
+    @runPlugins target, mainConfig, (err) =>
+      return @emit 'error', err if err?
 
       @services = []
 
@@ -30,25 +29,25 @@ class Layer extends EventEmitter
       # we just want to deploy locally
       if isLocal
         console.log "DEPLOYING LOCALLY"
-        layer.hosts = [layer.hosts[0]]
+        target.hosts = [target.hosts[0]]
       else
-        console.log "WORKING WITH #{layer.hosts.length} SERVERS: #{layer.hosts.join(',')}"
+        console.log "WORKING WITH #{target.hosts.length} SERVERS: #{target.hosts.join(',')}"
 
       @colorMap = {}
-      if layer.hosts.length > 1
+      if target.hosts.length > 1
         @groupDeploy = true
 
-      for server, index in layer.hosts
-        serverConfig = new Server @name, server, layer, mainConfig
-        service = new Service(@name, @repoName, serverConfig, this, isLocal)
+      for server, index in target.hosts
+        serverConfig = new ServerConfig @name, server, target, mainConfig
+        service = new Service @name, @repoName, serverConfig, @, isLocal
         @services.push service
         @colorMap[service.host] = COLORS[index % COLORS.length]
 
       @emit "ready"
 
   # we resolve and run the plugins here, as they can change any parameters here
-  runPlugins: (layer, mainConfig, cb) ->
-    plugins = layer.plugins || mainConfig.getPlugins()
+  runPlugins: (target, mainConfig, cb) ->
+    plugins = target.plugins || mainConfig.getPlugins()
     # this needs to go on the next tick so we have time to attached the handler
     return process.nextTick cb if not plugins
     toRun = []
@@ -56,10 +55,10 @@ class Layer extends EventEmitter
       plugin.name = name
       toRun.push plugin
 
-    withLayer = @runPlugin layer
-    async.forEach toRun, withLayer, cb
+    withTarget = @runPlugin target
+    async.forEach toRun, withTarget, cb
 
-  runPlugin: curry (layer, plugin, cb) ->
+  runPlugin: curry (target, plugin, cb) ->
     if not plugin.overrides
       return cb new Error("invalid plugin definition, you need an overrides directive")
 
@@ -73,7 +72,7 @@ class Layer extends EventEmitter
     console.log "running plugin at #{pluginPath}"
     pluginModule plugin.opts, (err, res) ->
       return cb err if err?
-      layer[plugin.overrides] = res
+      target[plugin.overrides] = res
       cb()
 
   deployOne: curry (branch, service, cb) ->
@@ -99,7 +98,6 @@ class Layer extends EventEmitter
     else
       withLines = @logOneForProcess lines, processName
     async.forEach @services, withLines, cb
-
 
   commitHistory: (revisions, cb) ->
     withRevisions = @historyOne revisions
@@ -145,4 +143,4 @@ class Layer extends EventEmitter
     else
       console.log msg
 
-module.exports = Layer
+module.exports = Target

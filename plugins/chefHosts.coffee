@@ -1,7 +1,6 @@
 
 {spawn} = require "child_process"
 HOUR_IN_MILLI = 3600000
-# 
 lastCheckInHours = 1
 
 knife = "knife"
@@ -19,7 +18,7 @@ getNodesByRoleAndEnv = (role, env, cb) ->
 
   knifeProc.stdout.on "data", (data) ->
     res += data
-  
+
   knifeProc.stderr.on "data", (data) ->
     console.log "had an error!", data
     return cb new Error("knife had an error")
