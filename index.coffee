@@ -21,7 +21,7 @@ path = require 'path'
 program = require 'commander'
 
 MainConfig = require "./lib/MainConfig"
-Layer = require "./lib/Layer"
+Target = require "./lib/Target"
 
 parseTargetAndProcessName = (arg) ->
   [target, processName] = arg.split ':'
@@ -43,37 +43,37 @@ program
   .command("deploy <name> [branch]")
   .description("deploys a branch (defaults to origin/master) to named target")
   .action (name, branch) ->
-    getLayer name, (err, layer) ->
+    getTarget name, (err, target) ->
       return finish err if err?
 
       branch = branch || "origin/master"
 
-      layer.deploy branch, finish
+      target.deploy branch, finish
 
-runProcessSpecificCommandOnLayer = (command) ->
+runProcessSpecificCommandOnTarget = (command) ->
   (name) ->
     {target, processName} = parseTargetAndProcessName name
-    getLayer target, (err, layer) ->
+    getTarget target, (err, target) ->
       return finish err if err?
       if processName
-        layer[command] processName, finish
+        target[command] processName, finish
       else
-        layer[command] finish
+        target[command] finish
 
 program
   .command("restart <name:process>")
   .description("restarts all processes associated with target.\nIf process is provided, restarts only the named process.\n`ggg restart prod` would restart all processes under the prod target\n`ggg restart prod:web` would restart only the `web` process in the `prod` target.")
-  .action runProcessSpecificCommandOnLayer('restart')
+  .action runProcessSpecificCommandOnTarget('restart')
 
 program
   .command("start <name:process>")
   .description("starts all processes associated with target. if process is provided, starts only the named process")
-  .action runProcessSpecificCommandOnLayer('start')
+  .action runProcessSpecificCommandOnTarget('start')
 
 program
   .command("stop <name:process>")
   .description("stops all processes associated with name. if process is provided, stops only the named process")
-  .action runProcessSpecificCommandOnLayer('stop')
+  .action runProcessSpecificCommandOnTarget('stop')
 
 program
   .command("logs <name:process>")
@@ -81,38 +81,38 @@ program
   .option("-l, --lines <num>", "the number of lines to log")
   .action (name) ->
     {target, processName} = parseTargetAndProcessName name
-    getLayer target, (err, layer) ->
+    getTarget target, (err, target) ->
       return finish err if err?
       lines = program.lines || LOGS_LINES
 
       if processName
-        layer.serverLogs lines, processName, finish
+        target.serverLogs lines, processName, finish
       else
-        layer.serverLogs lines, finish
+        target.serverLogs lines, finish
 
 program
   .command("history <name>")
   .description("Shows a history of #{COMMIT_HISTORY} last commits deployed")
   .option("-r, --revisions <num>", "the number of commits to show")
   .action (name) ->
-    getLayer name, (err, layer) ->
+    getTarget name, (err, target) ->
       return finish err if err?
       revisions = program.args.revisions || COMMIT_HISTORY
-      layer.commitHistory revisions, finish
+      target.commitHistory revisions, finish
 
 program
   .command("command <name> <command>")
   .description("run a command over ssh in the root of your project directory")
   .action (name, command) ->
-    getLayer name, (err, layer) ->
+    getTarget name, (err, target) ->
       return finish err if err?
-      layer.runCommand command, finish
+      target.runCommand command, finish
 
 program
   .command("list")
   .description("lists all deploy targets")
   .action ->
-    getConfigRepo (err, repoName, mainConfig) ->
+    getConfigAndRepoName (err, mainConfig) ->
       return finish err if err?
 
       list mainConfig, finish
@@ -121,7 +121,7 @@ program
   .command("servers <name>")
   .description("lists deploy server locations")
   .action (name) ->
-    getLayer name, finish
+    getTarget name, finish
 
 program
   .command("help")
@@ -186,7 +186,7 @@ init = (cb) ->
 
 list = (mainConfig, cb) ->
   console.log "GOGOGO servers (see ggg.js)"
-  console.log " - " + mainConfig.getLayerNames().join("\n - ")
+  console.log " - " + mainConfig.getTargetNames().join("\n - ")
 
 ## HELPERS #################################################
 # gets the repo url for the current directory
@@ -204,7 +204,7 @@ reponame = (dir, cb) ->
 mainConfigPath = -> path.join process.cwd(), CONFIG
 
 # returns the config object and the repoName
-getConfigRepo = (cb) ->
+getConfigAndRepoName = (cb) ->
   reponame process.cwd(), (err, repoName) ->
     return cb err if err?
     MainConfig.loadFromFile mainConfigPath(), (err, mainConfig) ->
@@ -213,35 +213,34 @@ getConfigRepo = (cb) ->
         " create one. Err=#{err.message}"
         return cb new Error errString
 
-      cb null, repoName, mainConfig
+      cb null, mainConfig, repoName
 
-#returns the layer object
-getLayer = (name, cb) ->
-  getConfigRepo (err, repoName, mainConfig) ->
+#returns the target object
+getTarget = (name, cb) ->
+  getConfigAndRepoName (err, mainConfig, repoName) ->
     return cb err if err?
 
-    layerConfig = mainConfig.getLayerByName name
-    if !layerConfig then return cb new Error("Invalid layer Name: #{name}")
+    targetConfig = mainConfig.getTargetByName name
+    if !targetConfig then return cb new Error("Invalid target Name: #{name}")
 
     if program.noPlugin
-      layerConfig.plugins = null
+      targetConfig.plugins = null
       mainConfig.disablePlugins()
 
     if program.local
-      layerConfig.hosts = ["#{program.local}@localhost"]
+      targetConfig.hosts = ["#{program.local}@localhost"]
 
-    layer = new Layer name, layerConfig, repoName, mainConfig, program.local
-    layer.on "error", (err) -> return cb err
-    layer.on "ready", ->
-      cb null, layer
+    target = new Target name, targetConfig, repoName, mainConfig, program.local
+    target.on "error", (err) -> return cb err
+    target.on "ready", ->
+      cb null, target
 
 # our handler on the finish
 finish = (err) ->
   if err?
     console.log "!!! " + err.message
-    console.log "stack follows:\n\n #{err.stack}"
+    #console.log "stack follows:\n\n #{err.stack}"
     process.exit 1
-  console.log "OK"
 
 # just export our program object
 module.exports = program

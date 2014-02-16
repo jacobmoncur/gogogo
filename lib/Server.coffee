@@ -1,5 +1,3 @@
-
-
 class Server
   constructor: (@name, @host, config, mainConfig) ->
     # if they override with an empty string, we want to use it, otherwise, do normal logic

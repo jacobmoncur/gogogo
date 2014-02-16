@@ -12,12 +12,12 @@ class MainConfig
 
   constructor: ({@start, @install, @plugins, @cron, servers}) ->
     # normalize to an array for multi server deploys
-    @layers = []
-    for name, layer of servers
-      @layers[name] = @normalizeLayer layer
+    @targets = []
+    for name, target of servers
+      @targets[name] = @normalizeTarget target
 
-  getLayerByName: (name) ->
-    @layers[name] || throw new Error "Cannot find server named #{name}. Check your config file"
+  getTargetByName: (name) ->
+    @targets[name] || throw new Error "Cannot find server named #{name}. Check your config file"
 
   getStart: ->
     @start
@@ -31,8 +31,8 @@ class MainConfig
   disablePlugins: ->
     @plugins = null
 
-  getLayerNames: ->
-    Object.keys @layers
+  getTargetNames: ->
+    Object.keys @targets
 
   #returns false if not defined
   getCron: ->
@@ -54,7 +54,7 @@ class MainConfig
 
     return cron
 
-  normalizeLayer: (config) ->
+  normalizeTarget: (config) ->
     if typeof config == "string"
       config = {
         hosts: [config]
