@@ -1,6 +1,7 @@
 class Cron
 
-  constructor: (cronConfig, @id, @repoDir, @serverUser, @logRotateDir = "/etc/logrotate.d", @cronDir = "/etc/cron.d") ->
+  constructor: (cronConfig, @id, @repoDir, @serverUser,
+  @logRotateDir = "/etc/logrotate.d", @cronDir = "/etc/cron.d") ->
     @cronJobs = []
 
     for name, cf of cronConfig
