@@ -1,20 +1,19 @@
-
-path = require "path"
-{EventEmitter} = require "events"
-Service = require "./Service"
-ServerConfig = require "./Server"
-async = require "async"
-{curry} = require "fjs"
-clc = require "cli-color"
+path = require 'path'
+{EventEmitter} = require 'events'
+Service = require './Service'
+ServerConfig = require './ServerConfig'
+async = require 'async'
+{curry} = require 'fjs'
+clc = require 'cli-color'
 
 COLORS = [
-  "white",
-  "red",
-  "green",
-  "yellow",
-  "blue",
-  "magenta",
-  "cyan"
+  'white',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'magenta',
+  'cyan'
 ]
 # Represnts a target for deployment
 
@@ -22,7 +21,7 @@ class Target extends EventEmitter
 
   constructor: (@name, target, @repoName, mainConfig, isLocal) ->
     @runPlugins target, mainConfig, (err) =>
-      return @emit "error", err if err?
+      return @emit 'error', err if err?
 
       @services = []
 
@@ -40,7 +39,7 @@ class Target extends EventEmitter
 
       for server, index in target.hosts
         serverConfig = new ServerConfig @name, server, target, mainConfig
-        service = new Service(@name, @repoName, serverConfig, this, isLocal)
+        service = new Service @name, @repoName, serverConfig, @, isLocal
         @services.push service
         @colorMap[service.host] = COLORS[index % COLORS.length]
 
@@ -75,12 +74,6 @@ class Target extends EventEmitter
       return cb err if err?
       target[plugin.overrides] = res
       cb()
-
-  list: ->
-    return @name if @services[0].length is 0
-    "#{@name}\n" +
-      @services[0].processes.map((p) => "  #{@name}:#{p.processName}").join('\n')
-
 
   deployOne: curry (branch, service, cb) ->
     service.deploy branch, cb
