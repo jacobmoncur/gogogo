@@ -2,7 +2,7 @@
 path = require "path"
 {EventEmitter} = require "events"
 Service = require "./Service"
-Server = require "./Server"
+ServerConfig = require "./Server"
 async = require "async"
 {curry} = require "fjs"
 clc = require "cli-color"
@@ -39,12 +39,11 @@ class Target extends EventEmitter
         @groupDeploy = true
 
       for server, index in target.hosts
-        serverConfig = new Server @name, server, target, mainConfig
+        serverConfig = new ServerConfig @name, server, target, mainConfig
         service = new Service(@name, @repoName, serverConfig, this, isLocal)
         @services.push service
         @colorMap[service.host] = COLORS[index % COLORS.length]
 
-      console.log 'service is', service
       @emit "ready"
 
   # we resolve and run the plugins here, as they can change any parameters here
@@ -76,6 +75,12 @@ class Target extends EventEmitter
       return cb err if err?
       target[plugin.overrides] = res
       cb()
+
+  list: ->
+    return @name if @services[0].length is 0
+    "#{@name}\n" +
+      @services[0].processes.map((p) => "  #{@name}:#{p.processName}").join('\n')
+
 
   deployOne: curry (branch, service, cb) ->
     service.deploy branch, cb

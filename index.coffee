@@ -17,7 +17,7 @@ VERSION = require("./package.json").version
 {exec} = require "child_process"
 fs = require 'fs'
 path = require 'path'
-
+async = require 'async'
 program = require 'commander'
 
 MainConfig = require "./lib/MainConfig"
@@ -186,7 +186,14 @@ init = (cb) ->
 
 list = (mainConfig, cb) ->
   console.log "GOGOGO servers (see ggg.js)"
-  console.log " - " + mainConfig.getTargetNames().join("\n - ")
+  targetNames = mainConfig.getTargetNames()
+  console.log 'targetNames is', targetNames
+  async.map targetNames, (targetName, done) ->
+    getTarget targetName, done
+  , (err, targets) ->
+    return cb err if err
+    console.log 'whhhhhhhhhhhhhhaaaaaaaaaaaaaaaaaaaaat'
+    console.log ' - ' + targets.map((t) -> t.list()).join('\n')
 
 ## HELPERS #################################################
 # gets the repo url for the current directory
@@ -231,9 +238,9 @@ getTarget = (name, cb) ->
       targetConfig.hosts = ["#{program.local}@localhost"]
 
     target = new Target name, targetConfig, repoName, mainConfig, program.local
+    # target won't call both of these
     target.on "error", (err) -> return cb err
-    target.on "ready", ->
-      cb null, target
+    target.on "ready", -> cb null, target
 
 # our handler on the finish
 finish = (err) ->
