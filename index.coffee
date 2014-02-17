@@ -185,14 +185,12 @@ init = (cb) ->
   fs.writeFile mainConfigPath() + ".js", initConfigContent, cb
 
 list = (mainConfig, cb) ->
-  console.log "GOGOGO servers (see ggg.js)"
+  console.log "GOGOGO targets (see ggg.js)"
   targetNames = mainConfig.getTargetNames()
-  console.log 'targetNames is', targetNames
   async.map targetNames, (targetName, done) ->
     getTarget targetName, done
   , (err, targets) ->
     return cb err if err
-    console.log 'whhhhhhhhhhhhhhaaaaaaaaaaaaaaaaaaaaat'
     console.log ' - ' + targets.map((t) -> t.list()).join('\n')
 
 ## HELPERS #################################################
@@ -245,8 +243,7 @@ getTarget = (name, cb) ->
 # our handler on the finish
 finish = (err) ->
   if err?
-    console.log "!!! " + err.message
-    #console.log "stack follows:\n\n #{err.stack}"
+    console.log "Error: " + err.message
     process.exit 1
 
 # just export our program object
