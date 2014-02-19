@@ -306,7 +306,7 @@ authenticity of your hosts.
 
 Change Log
 ----------
-
+* 0.5.2 - fix a whoopsie in ggg list
 * 0.5.1 - `ggg list` now lists all processes as well as targets
 * 0.5.0 - Add ability to support running multiple processes in one deploy
   target
